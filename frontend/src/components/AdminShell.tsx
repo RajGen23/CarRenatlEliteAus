@@ -53,7 +53,6 @@ export function AdminShell({ title, children, action }: { title: string; childre
 
   return (
     <View style={styles.root}>
-      {/* Sidebar */}
       <View style={styles.sidebar}>
         <View style={styles.brandRow}>
           <View style={styles.brandRing}><Text style={styles.brandText}>lD</Text></View>
@@ -100,7 +99,6 @@ export function AdminShell({ title, children, action }: { title: string; childre
         </View>
       </View>
 
-      {/* Main content */}
       <View style={styles.main}>
         <View style={styles.topBar}>
           <Text style={styles.title}>{title}</Text>

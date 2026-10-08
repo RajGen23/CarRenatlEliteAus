@@ -94,7 +94,6 @@ export default function VendorBookings() {
                 </View>
               </View>
 
-              {/* Customer */}
               <View style={styles.customerRow}>
                 {b.customer_picture ? (
                   <Image source={{ uri: b.customer_picture }} style={styles.avatar} />
@@ -109,7 +108,6 @@ export default function VendorBookings() {
                 </View>
               </View>
 
-              {/* Schedule */}
               <View style={styles.timeline}>
                 <View style={styles.timeRow}>
                   <Ionicons name="navigate-circle" size={14} color={colors.primary} />
@@ -130,7 +128,6 @@ export default function VendorBookings() {
                 </View>
               </View>
 
-              {/* Money */}
               <View style={styles.money}>
                 <View style={styles.moneyCell}>
                   <Text style={styles.moneyLabel}>GROSS</Text>

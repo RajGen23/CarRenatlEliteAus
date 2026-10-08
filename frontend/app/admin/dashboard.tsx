@@ -87,7 +87,6 @@ export default function AdminDashboard() {
         </View>
       ) : null}
 
-      {/* KPI grid */}
       <View style={s.kpiGrid} testID="dashboard-kpi-grid">
         {kpis.map((k) => (
           <View key={k.key} style={s.kpiCard} testID={`kpi-${k.key}`}>
@@ -103,7 +102,6 @@ export default function AdminDashboard() {
         ))}
       </View>
 
-      {/* Revenue chart */}
       <View style={s.panel} testID="dashboard-revenue-chart">
         <View style={s.panelHead}>
           <Text style={s.panelTitle}>Revenue · last 6 months</Text>
@@ -124,7 +122,6 @@ export default function AdminDashboard() {
         </View>
       </View>
 
-      {/* Recent bookings */}
       <View style={s.sectionHead}>
         <Text style={s.panelTitle}>Recent bookings</Text>
       </View>

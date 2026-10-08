@@ -127,9 +127,7 @@ def _run(coro):
     return loop.run_until_complete(coro)
 
 
-# =====================================================
 # Renter profile
-# =====================================================
 class TestRenterProfile:
     def test_get_returns_shape(self, renter_token):
         r = requests.get(f"{API}/profile/renter", headers=_hdr(renter_token))
@@ -153,9 +151,7 @@ class TestRenterProfile:
             assert got["profile"][k] == v
 
 
-# =====================================================
 # Create booking behaviour
-# =====================================================
 class TestCreateBooking:
     def test_incomplete_profile_rejects_400(self, fresh_renter):
         r = _create_booking(fresh_renter["token"])
@@ -183,9 +179,7 @@ class TestCreateBooking:
         TestCreateBooking.total = b["total"]
 
 
-# =====================================================
 # Vendor requests + accept + decline
-# =====================================================
 class TestVendorRequests:
     def test_non_vendor_forbidden(self, renter_token):
         r = requests.get(f"{API}/vendor/requests", headers=_hdr(renter_token))
@@ -269,9 +263,7 @@ class TestVendorRequests:
         assert r_again.status_code == 400
 
 
-# =====================================================
 # Authorisation
-# =====================================================
 class TestAuthorisation:
     def test_other_vendor_cannot_accept(self, renter_token, vendor_token, db):
         """Register a NEW vendor and try to accept the seeded request on the demo car."""
@@ -302,9 +294,7 @@ class TestAuthorisation:
         assert c.status_code == 200, c.text
 
 
-# =====================================================
 # Cancel semantics
-# =====================================================
 class TestCancel:
     def test_cancel_pending_no_refund(self, renter_token):
         _save_profile(renter_token, _valid_profile())
@@ -337,9 +327,7 @@ class TestCancel:
         assert round(_wallet(renter_token) - wallet_before, 2) == expected_refund
 
 
-# =====================================================
 # Auto-decline after 24h
-# =====================================================
 class TestAutoDecline:
     def test_expired_pending_flips_to_declined(self, renter_token, vendor_token, db):
         _save_profile(renter_token, _valid_profile())
@@ -358,9 +346,7 @@ class TestAutoDecline:
         assert b["decline_reason"] == "No response from host within 24 hours"
 
 
-# =====================================================
 # Vendor dashboard pending count
-# =====================================================
 class TestVendorDashboard:
     def test_pending_requests_field_present(self, vendor_token):
         r = requests.get(f"{API}/vendor/dashboard", headers=_hdr(vendor_token))

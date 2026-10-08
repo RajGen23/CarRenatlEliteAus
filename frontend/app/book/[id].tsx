@@ -190,7 +190,6 @@ export default function Book() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
-        {/* Car summary */}
         <View style={styles.carRow}>
           <Image source={{ uri: car.image }} style={styles.carThumb} />
           <View style={{ flex: 1 }}>
@@ -200,16 +199,13 @@ export default function Book() {
           </View>
         </View>
 
-        {/* Map preview */}
         <View style={styles.mapWrap}>
           <View style={styles.mapGrid}>
             {Array.from({ length: 64 }).map((_, i) => (
               <View key={i} style={styles.mapCell} />
             ))}
           </View>
-          {/* path */}
           <View style={styles.mapPath} />
-          {/* pickup marker */}
           <View style={[styles.marker, { top: 36, left: 56 }]}>
             <Animated.View
               style={[
@@ -235,7 +231,6 @@ export default function Book() {
           </View>
         </View>
 
-        {/* Locations */}
         <View style={styles.section}>
           <Text style={styles.label}>PICKUP LOCATION</Text>
           <View style={styles.input}>
@@ -265,7 +260,6 @@ export default function Book() {
           </View>
         </View>
 
-        {/* Date selectors */}
         <View style={[styles.section, { flexDirection: "row", gap: spacing.md }]}>
           <Pressable
             testID="pickup-date-btn"
@@ -302,7 +296,6 @@ export default function Book() {
           onConfirm={onPickDate}
         />
 
-        {/* Coupon */}
         <View style={styles.section}>
           <Text style={styles.label}>PROMO CODE</Text>
           <View style={[styles.input, { paddingRight: 4 }]}>
@@ -327,7 +320,6 @@ export default function Book() {
           )}
         </View>
 
-        {/* Summary */}
         <View style={[styles.section, styles.summary]}>
           <Text style={styles.summaryTitle}>PRICE BREAKDOWN</Text>
           <SummaryRow label={`Subtotal · ${days} ${days === 1 ? "day" : "days"}`} value={`$${subtotal.toFixed(2)}`} />
@@ -377,7 +369,6 @@ export default function Book() {
         )}
       </ScrollView>
 
-      {/* Sticky confirm */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom + spacing.sm, spacing.xl) }]}>
         <Pressable
           testID="confirm-booking"

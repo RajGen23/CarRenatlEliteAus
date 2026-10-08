@@ -112,7 +112,6 @@ export default function VendorCalendar() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 140 }}>
-        {/* Month switcher */}
         <View style={styles.monthRow}>
           <Pressable testID="cal-prev" onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} style={styles.monthBtn}>
             <Ionicons name="chevron-back" size={18} color={colors.primary} />
@@ -123,14 +122,12 @@ export default function VendorCalendar() {
           </Pressable>
         </View>
 
-        {/* Weekday headers */}
         <View style={styles.weekRow}>
           {["S","M","T","W","T","F","S"].map((d, i) => (
             <Text key={i} style={styles.weekHead}>{d}</Text>
           ))}
         </View>
 
-        {/* Days grid */}
         <View style={styles.grid}>
           {days.map((d, idx) => {
             if (!d) return <View key={idx} style={styles.cellEmpty} />;
@@ -167,14 +164,12 @@ export default function VendorCalendar() {
           })}
         </View>
 
-        {/* Legend */}
         <View style={styles.legend}>
           <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.primary }]} /><Text style={styles.lText}>Selected</Text></View>
           <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.error }]} /><Text style={styles.lText}>Blocked</Text></View>
           <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.textMuted }]} /><Text style={styles.lText}>Past</Text></View>
         </View>
 
-        {/* Actions */}
         <View style={styles.actionRow}>
           <Pressable
             testID="unblock-btn"

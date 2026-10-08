@@ -53,7 +53,6 @@ export default function AdminReferrals() {
 
   return (
     <AdminShell title="Referral Program">
-      {/* Config */}
       <View style={s.configCard} testID="referral-config">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
           <Pressable testID="referral-toggle" onPress={() => setEnabled(!enabled)} style={[s.toggle, enabled && s.toggleOn]}>
@@ -78,7 +77,6 @@ export default function AdminReferrals() {
         </Pressable>
       </View>
 
-      {/* Stats */}
       <View style={s.grid} testID="referral-stats">
         {cards.map((c) => (
           <View key={c.key} style={s.card} testID={`ref-stat-${c.key}`}>

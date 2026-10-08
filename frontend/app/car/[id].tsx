@@ -79,7 +79,6 @@ export default function CarDetail() {
   return (
     <Screen edges={["bottom"]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
-        {/* Gallery */}
         <View
           style={styles.galleryWrap}
           onLayout={(e) => setGalleryWidth(e.nativeEvent.layout.width)}
@@ -167,7 +166,6 @@ export default function CarDetail() {
           </View>
         </View>
 
-        {/* Thumbnail strip */}
         {car.gallery.length > 1 && (
           <ScrollView
             horizontal
@@ -192,7 +190,6 @@ export default function CarDetail() {
           </ScrollView>
         )}
 
-        {/* Title */}
         <View style={styles.titleBlock}>
           <View style={{ flex: 1 }}>
             <Text style={styles.brandLabel}>{car.brand.toUpperCase()}</Text>
@@ -214,7 +211,6 @@ export default function CarDetail() {
           </View>
         </View>
 
-        {/* Spec grid */}
         <View style={styles.specGrid}>
           <SpecCard label="POWER" value={`${car.horsepower}`} unit="HP" icon="flash-outline" />
           <SpecCard label="0-100 KM/H" value={car.acceleration.split(" ")[0]} unit="SEC" icon="speedometer-outline" />
@@ -224,13 +220,11 @@ export default function CarDetail() {
           <SpecCard label="GEARBOX" value={car.transmission} unit="" icon="settings-outline" />
         </View>
 
-        {/* Description */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>ABOUT</Text>
           <Text style={styles.description}>{car.description}</Text>
         </View>
 
-        {/* Features */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>FEATURES</Text>
           <View style={styles.featuresList}>
@@ -243,7 +237,6 @@ export default function CarDetail() {
           </View>
         </View>
 
-        {/* Reviews */}
         <View style={styles.section}>
           <View style={styles.reviewHeader}>
             <Text style={styles.sectionLabel}>REVIEWS · {reviews.length}</Text>
@@ -284,7 +277,6 @@ export default function CarDetail() {
         </View>
       </ScrollView>
 
-      {/* Sticky Book bar */}
       <View style={[styles.bookBar, { paddingBottom: Math.max(insets.bottom + spacing.sm, spacing.xl) }]}>
         <View>
           <Text style={styles.bookBarPriceLabel}>FROM</Text>

@@ -93,7 +93,6 @@ export default function Home() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         testID="home-scroll"
       >
-        {/* Brand Header */}
         <View style={styles.brandHeader}>
           <View style={styles.brandLeft}>
             <Image source={LOGO_SOURCE} style={styles.brandLogo} resizeMode="contain" />
@@ -121,7 +120,6 @@ export default function Home() {
           </Pressable>
         </View>
 
-        {/* Greeting */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greetingMuted}>Good drive ahead</Text>
@@ -129,7 +127,6 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Search */}
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
           <TextInput
@@ -147,7 +144,6 @@ export default function Home() {
           </Pressable>
         </View>
 
-        {/* Hero Banner Slider */}
         {featured.length > 0 && (
           <View
             style={{ marginTop: spacing.lg, overflow: "hidden" }}
@@ -217,7 +213,6 @@ export default function Home() {
           </View>
         )}
 
-        {/* Categories */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Categories</Text>
         </View>
@@ -242,7 +237,6 @@ export default function Home() {
           })}
         </ScrollView>
 
-        {/* Featured Section */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{category === "All" ? "Curated" : category}</Text>
           <Pressable onPress={() => router.push("/(tabs)/cars")} testID="view-all">

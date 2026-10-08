@@ -98,7 +98,6 @@ export default function VendorProfile() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 140 }}>
-        {/* KYC status */}
         <View style={styles.kycCard}>
           <View style={styles.kycRow}>
             <View style={[styles.kycIcon, kyc === "approved" && styles.kycIconOk]}>

@@ -126,13 +126,11 @@ export default function VendorRequests() {
         ) : (
           items.map((b) => (
             <View key={b.booking_id} style={styles.card} testID={`request-${b.booking_id}`}>
-              {/* Countdown */}
               <View style={styles.timerRow}>
                 <Ionicons name="time-outline" size={12} color={colors.warning} />
                 <Text style={styles.timerText}>{hoursLeft(b.request_expires_at) ?? "Awaiting response"}</Text>
               </View>
 
-              {/* Renter profile */}
               <View style={styles.renterRow}>
                 {b.renter.picture ? (
                   <Image source={{ uri: b.renter.picture }} style={styles.avatar} />
@@ -170,7 +168,6 @@ export default function VendorRequests() {
                 />
               </View>
 
-              {/* Car + schedule */}
               <View style={styles.carRow}>
                 <Image source={{ uri: b.car_image }} style={styles.carImg} />
                 <View style={{ flex: 1 }}>
@@ -231,7 +228,6 @@ export default function VendorRequests() {
         )}
       </ScrollView>
 
-      {/* Decline reason sheet */}
       <Modal visible={!!declining} transparent animationType="slide" onRequestClose={() => setDeclining(null)}>
         <View style={styles.backdrop}>
           <View style={styles.sheet} testID="decline-sheet">

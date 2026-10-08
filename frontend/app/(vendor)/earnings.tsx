@@ -62,7 +62,6 @@ export default function VendorEarnings() {
         contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} tintColor={colors.primary} />}
       >
-        {/* Balance card */}
         <View style={styles.bal}>
           <Text style={styles.balLabel}>AVAILABLE FOR PAYOUT</Text>
           <Text style={styles.balAmount}>${(data?.available ?? 0).toFixed(2)}</Text>
@@ -74,7 +73,6 @@ export default function VendorEarnings() {
           </View>
         </View>
 
-        {/* Withdraw */}
         <View style={styles.withdraw}>
           <Text style={styles.sectionTitle}>Request a payout</Text>
           <Text style={styles.sectionSub}>Funds arrive 1–2 business days · transferred to your saved bank.</Text>
@@ -102,7 +100,6 @@ export default function VendorEarnings() {
           </View>
         </View>
 
-        {/* Payouts history */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Payout history</Text>
           {(data?.payouts ?? []).length === 0 ? (
@@ -123,7 +120,6 @@ export default function VendorEarnings() {
           )}
         </View>
 
-        {/* Invoices */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Invoices</Text>
           {(data?.invoices ?? []).length === 0 ? (

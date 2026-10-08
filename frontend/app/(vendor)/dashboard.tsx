@@ -80,7 +80,6 @@ export default function VendorDashboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
-        {/* Brand header */}
         <View style={styles.brandHeader}>
           <View style={styles.brandLeft}>
             <Image source={LOGO_SOURCE} style={styles.brandLogo} />
@@ -106,7 +105,6 @@ export default function VendorDashboard() {
           </Text>
         </View>
 
-        {/* KPI grid */}
         <View style={styles.kpiGrid}>
           <KpiCard label="VEHICLES" value={`${data?.total_vehicles ?? 0}`} icon="car-sport-outline" />
           <KpiCard label="UPCOMING" value={`${data?.upcoming_bookings ?? 0}`} icon="calendar-outline" />
@@ -114,7 +112,6 @@ export default function VendorDashboard() {
           <KpiCard label="UTILIZATION" value={`${data?.utilization ?? 0}%`} icon="pulse-outline" />
         </View>
 
-        {/* Revenue card */}
         <View style={styles.revenueCard}>
           <View style={styles.revenueTop}>
             <Text style={styles.revenueLabel}>NET EARNINGS · ALL TIME</Text>
@@ -141,7 +138,6 @@ export default function VendorDashboard() {
           </View>
         </View>
 
-        {/* Monthly chart */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Monthly earnings</Text>
           <Text style={styles.sectionSub}>Last 6 months · net to your bank</Text>
@@ -163,7 +159,6 @@ export default function VendorDashboard() {
           </View>
         </View>
 
-        {/* Quick actions */}
         <View style={[styles.section, { gap: spacing.sm }]}>
           <Text style={styles.sectionTitle}>Quick actions</Text>
           <ActionRow

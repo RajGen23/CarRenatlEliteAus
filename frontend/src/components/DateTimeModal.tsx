@@ -108,7 +108,6 @@ export function DateTimeModal({
             </Pressable>
           </View>
 
-          {/* Preview chip */}
           <View style={styles.previewChip}>
             <Ionicons name="time-outline" size={14} color={colors.primary} />
             <Text style={styles.previewText}>
@@ -122,7 +121,6 @@ export function DateTimeModal({
             </Text>
           </View>
 
-          {/* Month switcher */}
           <View style={styles.monthRow}>
             <Pressable
               testID="dt-prev-month"
@@ -145,7 +143,6 @@ export function DateTimeModal({
             </Pressable>
           </View>
 
-          {/* Weekday headers */}
           <View style={styles.weekRow}>
             {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
               <Text key={i} style={styles.weekHead}>
@@ -154,7 +151,6 @@ export function DateTimeModal({
             ))}
           </View>
 
-          {/* Calendar grid */}
           <View style={styles.grid}>
             {grid.map((d, idx) => {
               if (!d) return <View key={idx} style={styles.cellEmpty} />;
@@ -185,7 +181,6 @@ export function DateTimeModal({
             })}
           </View>
 
-          {/* Time pickers */}
           <View style={styles.timeWrap}>
             <Text style={styles.timeLabel}>TIME</Text>
             <View style={styles.timeRow}>
@@ -248,7 +243,6 @@ export function DateTimeModal({
             </View>
           </View>
 
-          {/* Actions */}
           <View style={styles.actions}>
             <Pressable
               testID="dt-cancel"

@@ -72,7 +72,6 @@ export default function Profile() {
           </View>
         </View>
 
-        {/* Wallet */}
         <Pressable
           testID="profile-wallet"
           onPress={() => router.push("/wallet")}
@@ -88,7 +87,6 @@ export default function Profile() {
           </View>
         </Pressable>
 
-        {/* Host CTA Card */}
         <Pressable
           testID="become-host-cta"
           onPress={() =>
@@ -132,7 +130,6 @@ export default function Profile() {
           </View>
         </Pressable>
 
-        {/* Menu */}
         <View style={styles.menuSection}>
           <Pressable
             testID="menu-wishlist"
