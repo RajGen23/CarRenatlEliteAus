@@ -87,4 +87,5 @@ def user_payload(user: dict) -> dict:
         "role": role,
         "status": user.get("status", "active"),
         "verified": bool(user.get("verified", False)),
+        "created_at": user.get("created_at"),
     }

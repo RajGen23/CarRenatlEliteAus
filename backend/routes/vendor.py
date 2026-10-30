@@ -144,8 +144,14 @@ async def dashboard(user: dict = Depends(get_vendor_user)):
 
     utilization = 0
     if car_ids:
-        booked_days = sum(b["days"] for b in upcoming + completed)
-        utilization = min(100, round(booked_days / (len(car_ids) * 30) * 100))
+        period_start = now - timedelta(days=30)
+        booked_seconds = 0.0
+        for b in upcoming + completed:
+            start = max(parse_iso(b["pickup_datetime"]), period_start)
+            end = min(parse_iso(b["drop_datetime"]), now)
+            if end > start:
+                booked_seconds += (end - start).total_seconds()
+        utilization = min(100, round(booked_seconds / (len(car_ids) * 30 * 86400) * 100))
 
     return {
         "kyc_status": (user.get("vendor_profile") or {}).get("kyc_status", "pending"),
@@ -174,11 +180,22 @@ async def list_fleet(user: dict = Depends(get_vendor_user)):
     return cars
 
 
+async def _confirmed_dates(car_id: str) -> set:
+    dates: set = set()
+    async for b in db.bookings.find(
+        {"car_id": car_id, "status": "upcoming"}, {"_id": 0, "pickup_datetime": 1, "drop_datetime": 1}
+    ):
+        window = BookingWindow(parse_datetime(b["pickup_datetime"]), parse_datetime(b["drop_datetime"]))
+        dates.update(window.calendar_dates())
+    return dates
+
+
 @router.get("/cars/{car_id}")
 async def get_fleet_car(car_id: str, user: dict = Depends(get_vendor_user)):
     car = await _owned_car(user["user_id"], car_id)
     car["listing_status"] = listing_status(car, host_is_approved(user))
     car["documents"] = await documents.list_documents(car_id)
+    car["booked_dates"] = sorted(await _confirmed_dates(car_id))
     return car
 
 
@@ -264,13 +281,7 @@ async def block_dates(car_id: str, payload: BlockDatesReq, user: dict = Depends(
     await _owned_car(user["user_id"], car_id)
     dates = _parse_dates(payload.dates)
     async with resource_lock(f"car:{car_id}"):
-        booked = set()
-        async for b in db.bookings.find(
-            {"car_id": car_id, "status": "upcoming"}, {"_id": 0, "pickup_datetime": 1, "drop_datetime": 1}
-        ):
-            window = BookingWindow(parse_datetime(b["pickup_datetime"]), parse_datetime(b["drop_datetime"]))
-            booked.update(window.calendar_dates())
-        clashes = sorted(booked.intersection(dates))
+        clashes = sorted((await _confirmed_dates(car_id)).intersection(dates))
         if clashes:
             raise HTTPException(
                 status_code=409,

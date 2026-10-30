@@ -8,7 +8,13 @@ import config
 from database import db
 from models import BookingCreate, RenterProfileUpsert, WalletTopup
 from security import get_current_user
-from services.availability import find_conflict, parse_booking_window
+from services.availability import (
+    find_conflict,
+    market_today,
+    parse_booking_window,
+    parse_calendar_date,
+    parse_datetime,
+)
 from services.bookings import (
     RENTER_REQUIRED_FIELDS,
     find_coupon,
@@ -21,6 +27,7 @@ from services.listings import find_listable_car, listable_filter
 router = APIRouter(tags=["renter"])
 
 CANCELLATION_REFUND_RATE = 0.8
+MIN_RENTER_AGE = 18
 
 
 @router.get("/profile/renter")
@@ -34,7 +41,22 @@ async def get_renter_profile(user: dict = Depends(get_current_user)):
 
 @router.patch("/profile/renter")
 async def save_renter_profile(payload: RenterProfileUpsert, user: dict = Depends(get_current_user)):
-    profile = {**payload.model_dump(), "updated_at": datetime.now(timezone.utc).isoformat()}
+    data = {k: v.strip() if isinstance(v, str) else v for k, v in payload.model_dump().items()}
+    missing = [f for f in RENTER_REQUIRED_FIELDS if not data.get(f)]
+    if missing:
+        raise HTTPException(status_code=400, detail="Please fill in every field before saving.")
+    try:
+        dob = parse_calendar_date(data["dob"])
+        license_expiry = parse_calendar_date(data["license_expiry"])
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must be in YYYY-MM-DD format.")
+    today = parse_calendar_date(market_today())
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    if not MIN_RENTER_AGE <= age <= 120:
+        raise HTTPException(status_code=400, detail=f"You must be at least {MIN_RENTER_AGE} to rent a car.")
+    if license_expiry < today:
+        raise HTTPException(status_code=400, detail="Your driver licence has expired.")
+    profile = {**data, "updated_at": datetime.now(timezone.utc).isoformat()}
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"renter_profile": profile}})
     return {"ok": True, "profile": profile, "complete": True}
 
@@ -124,13 +146,19 @@ async def cancel_booking(booking_id: str, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Booking not found")
     if booking["status"] not in ("pending", "upcoming"):
         raise HTTPException(status_code=400, detail="Only pending or upcoming bookings can be cancelled")
+    if booking["status"] == "upcoming" and parse_datetime(booking["pickup_datetime"]) <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="This trip has already started and can no longer be cancelled.")
 
     # Pending requests were never charged, so there is nothing to refund.
-    refund = 0.0
-    if booking["status"] == "upcoming":
-        refund = round(booking["total"] * CANCELLATION_REFUND_RATE, 2)
+    refund = round(booking["total"] * CANCELLATION_REFUND_RATE, 2) if booking["status"] == "upcoming" else 0.0
+    res = await db.bookings.update_one(
+        {"booking_id": booking_id, "status": booking["status"]},
+        {"$set": {"status": "cancelled", "refund": refund, "cancelled_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=409, detail="This booking was just updated. Refresh and try again.")
+    if refund:
         await db.users.update_one({"user_id": user["user_id"]}, {"$inc": {"wallet_balance": refund}})
-    await db.bookings.update_one({"booking_id": booking_id}, {"$set": {"status": "cancelled", "refund": refund}})
     return {"ok": True, "refund": refund}
 
 

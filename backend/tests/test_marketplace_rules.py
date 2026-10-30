@@ -376,3 +376,91 @@ class TestRenterPrivacy:
         assert confirmed["customer_email"].endswith("@example.com")
         assert RENTER_PROFILE["address_line1"] not in str(confirmed)
         assert RENTER_PROFILE["dob"] not in str(confirmed)
+
+
+class TestRefundsAndCancellations:
+    def test_admin_cannot_refund_uncharged_or_twice(self, demo_host, admin, free_dates):
+        renter = _renter("TEST_rules_refund")
+        pickup, drop = free_dates()
+        pending = _book(renter, DEMO_CAR, pickup, drop).json()
+        assert requests.post(f"{API}/admin/bookings/{pending['booking_id']}/refund", json={}, headers=admin).status_code == 400
+
+        pickup, drop = free_dates()
+        charged = _book(renter, DEMO_CAR, pickup, drop).json()
+        assert requests.post(f"{API}/vendor/bookings/{charged['booking_id']}/accept", headers=demo_host).status_code == 200
+        listed = next(b for b in requests.get(f"{API}/admin/bookings", headers=admin).json()
+                      if b["booking_id"] == charged["booking_id"])
+        assert listed["refundable"] == charged["total"]
+
+        too_much = requests.post(f"{API}/admin/bookings/{charged['booking_id']}/refund",
+                                 json={"amount": charged["total"] + 1}, headers=admin)
+        assert too_much.status_code == 400
+        ok = requests.post(f"{API}/admin/bookings/{charged['booking_id']}/refund", json={}, headers=admin)
+        assert ok.status_code == 200 and ok.json()["refunded"] == charged["total"]
+        again = requests.post(f"{API}/admin/bookings/{charged['booking_id']}/refund", json={}, headers=admin)
+        assert again.status_code == 400
+
+    def test_refund_after_renter_cancellation_is_capped(self, demo_host, admin, free_dates):
+        renter = _renter("TEST_rules_partial")
+        pickup, drop = free_dates()
+        booking = _book(renter, DEMO_CAR, pickup, drop).json()
+        assert requests.post(f"{API}/vendor/bookings/{booking['booking_id']}/accept", headers=demo_host).status_code == 200
+        cancelled = requests.post(f"{API}/bookings/{booking['booking_id']}/cancel", headers=_hdr(renter)).json()
+        assert cancelled["refund"] == round(booking["total"] * 0.8, 2)
+        remaining = round(booking["total"] - cancelled["refund"], 2)
+        listed = next(b for b in requests.get(f"{API}/admin/bookings", headers=admin).json()
+                      if b["booking_id"] == booking["booking_id"])
+        assert listed["refundable"] == remaining
+        over = requests.post(f"{API}/admin/bookings/{booking['booking_id']}/refund",
+                             json={"amount": remaining + 1}, headers=admin)
+        assert over.status_code == 400
+
+    def test_started_trip_cannot_be_cancelled(self, demo_host, db, free_dates):
+        renter = _renter("TEST_rules_started")
+        pickup, drop = free_dates()
+        bid = _book(renter, DEMO_CAR, pickup, drop).json()["booking_id"]
+        assert requests.post(f"{API}/vendor/bookings/{bid}/accept", headers=demo_host).status_code == 200
+        started = datetime.now(timezone.utc) - timedelta(hours=2)
+        _run(db.bookings.update_one({"booking_id": bid}, {"$set": {
+            "pickup_datetime": started.isoformat(),
+            "pickup_at": started.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }}))
+        r = requests.post(f"{API}/bookings/{bid}/cancel", headers=_hdr(renter))
+        assert r.status_code == 400
+        assert "started" in r.json()["detail"]
+
+    def test_cancel_records_time(self, free_dates, db):
+        renter = _renter("TEST_rules_cxl")
+        pickup, drop = free_dates()
+        bid = _book(renter, DEMO_CAR, pickup, drop).json()["booking_id"]
+        assert requests.post(f"{API}/bookings/{bid}/cancel", headers=_hdr(renter)).status_code == 200
+        assert _run(db.bookings.find_one({"booking_id": bid}, {"_id": 0, "cancelled_at": 1})).get("cancelled_at")
+
+
+class TestRenterProfileValidation:
+    def test_rejects_expired_licence_underage_and_bad_dates(self):
+        _, tok, _ = _register("TEST_rules_profile")
+        cases = [
+            ({"license_expiry": "2020-01-01"}, "expired"),
+            ({"dob": (datetime.now(timezone.utc) - timedelta(days=365 * 16)).date().isoformat()}, "at least"),
+            ({"dob": "14/02/1988"}, "YYYY-MM-DD"),
+            ({"city": "   "}, "every field"),
+        ]
+        for override, message in cases:
+            r = requests.patch(f"{API}/profile/renter", json={**RENTER_PROFILE, **override}, headers=_hdr(tok))
+            assert r.status_code == 400, override
+            assert message in r.json()["detail"], r.json()
+        assert requests.patch(f"{API}/profile/renter", json=RENTER_PROFILE, headers=_hdr(tok)).status_code == 200
+
+
+class TestHostCalendar:
+    def test_fleet_car_lists_confirmed_dates(self, demo_host, free_dates):
+        renter = _renter("TEST_rules_calendar")
+        pickup, drop = free_dates()
+        bid = _book(renter, DEMO_CAR, pickup, drop).json()["booking_id"]
+        car = requests.get(f"{API}/vendor/cars/{DEMO_CAR}", headers=demo_host).json()
+        first_day = pickup.astimezone(MARKET_TZ).date().isoformat()
+        assert first_day not in car["booked_dates"]
+        assert requests.post(f"{API}/vendor/bookings/{bid}/accept", headers=demo_host).status_code == 200
+        car = requests.get(f"{API}/vendor/cars/{DEMO_CAR}", headers=demo_host).json()
+        assert first_day in car["booked_dates"]

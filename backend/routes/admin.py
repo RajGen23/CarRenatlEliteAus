@@ -8,6 +8,7 @@ import config
 from database import db
 from models import CouponIn, RefundBody
 from services import documents
+from services.locks import resource_lock
 from services.availability import market_today, parse_calendar_date
 from services.reporting import CONFIRMED, monthly_totals, NON_CUSTOMER_ROLES
 from security import get_admin_user
@@ -211,26 +212,49 @@ async def list_bookings(status: Optional[str] = None, refund: Optional[str] = No
         total = b.get("total", 0)
         b["commission"] = round(total * config.COMMISSION_RATE, 2)
         b["net"] = round(total * (1 - config.COMMISSION_RATE), 2)
+        b["refundable"] = _refundable_amount(b)
     return bookings
+
+
+def _was_charged(booking: dict) -> bool:
+    if booking.get("paid"):
+        return True
+    if booking.get("status") in ("upcoming", "completed"):
+        return True
+    return booking.get("refund_status") == "requested"
+
+
+def _refundable_amount(booking: dict) -> float:
+    """What can still go back to the renter: the charge minus anything already refunded."""
+    if not _was_charged(booking) or booking.get("refund_status") == "approved":
+        return 0.0
+    already = float(booking.get("refund") or 0) + float(booking.get("refund_amount") or 0)
+    return max(0.0, round(float(booking.get("total", 0)) - already, 2))
 
 
 @router.post("/bookings/{booking_id}/refund")
 async def refund_booking(booking_id: str, body: RefundBody):
-    booking = await db.bookings.find_one({"booking_id": booking_id})
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    amount = float(body.amount if body.amount is not None else booking.get("total", 0))
-    await db.users.update_one({"user_id": booking["user_id"]}, {"$inc": {"wallet_balance": amount}})
-    await db.bookings.update_one(
-        {"booking_id": booking_id},
-        {"$set": {
-            "status": "cancelled",
-            "refund_status": "approved",
-            "refund_amount": amount,
-            "refund_reason": body.reason or "Admin issued refund",
-            "refunded_at": datetime.now(timezone.utc).isoformat(),
-        }},
-    )
+    async with resource_lock(f"refund:{booking_id}"):
+        booking = await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        refundable = _refundable_amount(booking)
+        if refundable <= 0:
+            raise HTTPException(status_code=400, detail="Nothing left to refund on this booking.")
+        amount = round(float(body.amount if body.amount is not None else refundable), 2)
+        if amount <= 0 or amount > refundable:
+            raise HTTPException(status_code=400, detail=f"Refund must be between $0.01 and ${refundable:.2f}.")
+        await db.users.update_one({"user_id": booking["user_id"]}, {"$inc": {"wallet_balance": amount}})
+        await db.bookings.update_one(
+            {"booking_id": booking_id},
+            {"$set": {
+                "status": "cancelled",
+                "refund_status": "approved",
+                "refund_amount": amount,
+                "refund_reason": body.reason or "Admin issued refund",
+                "refunded_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
     return {"refunded": amount}
 
 
