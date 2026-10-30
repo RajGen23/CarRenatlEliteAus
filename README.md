@@ -56,3 +56,24 @@ ADMIN_PASSWORD='<same password>' python -m pytest tests -q
 ```
 
 `API_BASE_URL` points the tests at a server other than `http://localhost:8000`.
+
+### End-to-end tests
+
+The Playwright suite in `frontend/e2e` drives the web build through the renter, host and admin flows. It needs the API running with demo data and the Expo web server pointing at it:
+
+```bash
+# terminal 1
+cd backend
+SEED_DEMO_DATA=true ADMIN_PASSWORD='<12+ characters>' uvicorn server:app
+
+# terminal 2
+cd frontend
+EXPO_PUBLIC_BACKEND_URL=http://localhost:8000 npx expo start --web
+
+# terminal 3
+cd frontend
+npx playwright install chromium   # first run only
+E2E_ADMIN_PASSWORD='<same password>' npm run e2e
+```
+
+`E2E_BASE_URL` and `E2E_API_URL` override the default `http://localhost:8081` and `http://localhost:8000`. Without `E2E_ADMIN_PASSWORD` the admin portal tests are skipped. Each test creates its own users and bookings, so the suite can run repeatedly against the same database.

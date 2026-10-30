@@ -21,7 +21,9 @@ Signing up requires a valid, unique email address and accepting the Terms of Ser
 - The renter must tick the rental agreement and cancellation policy before requesting; the acceptance time is stored on the booking.
 - Reviews are limited to renters who completed a trip in that car, one review per trip.
 - Bookings are grouped as Requests, Upcoming, Past and Closed (cancelled or declined). Declined requests show the host's reason and note.
-- Cancelling a pending request costs nothing; cancelling an upcoming booking refunds 80% to the wallet.
+- Cancelling a pending request costs nothing; cancelling an upcoming booking refunds 80% to the wallet. A trip can't be cancelled once its pickup time has passed.
+- The renter profile must have valid dates, a licence that hasn't expired and a renter aged 18 or over.
+- Notifications are built from the renter's own booking events (request sent, accepted, declined, cancelled with the actual refund) plus the currently active coupons.
 - Coupons are managed by admins and applied at checkout.
 
 ## Hosts
@@ -44,7 +46,7 @@ Signing up requires a valid, unique email address and accepting the Terms of Ser
 | Users | Search and filter, block or unblock (blocking ends active sessions), verify |
 | Vendors | Approve or reject KYC, suspend (suspension takes the vendor's cars off the market) |
 | Vehicles | Approval status, insurance expiry alerts, view insurance and registration documents, approve (requires both documents and valid insurance) or reject |
-| Bookings | Status and refund filters, issue refunds to the wallet |
+| Bookings | Status and refund filters, refund to the wallet with confirmation. Only charged bookings can be refunded, once, and never more than what's left after earlier refunds |
 | Coupons | Create, edit, deactivate, delete |
 | Finance | Gross, commission, vendor payouts, tax and GST, monthly breakdown, per-vendor payouts due |
 | Revenue | GMV, average booking value, LTV, CAC, fleet utilisation, repeat rate, GMV trend |
@@ -98,9 +100,10 @@ backend/
   tests/               API test suite
 frontend/
   app/(tabs)/          Renter app
-  app/(vendor)/        Host app
+  app/(vendor)/        Host app (the bookings tab lives at /reservations so it doesn't clash with the renter's /bookings)
   app/admin/           Admin portal
   src/                 API client, auth context, app config, theme, shared components
+  e2e/                 Playwright end-to-end tests
 ```
 
 Booking statuses: `pending`, `upcoming`, `completed`, `cancelled`, `declined`.
