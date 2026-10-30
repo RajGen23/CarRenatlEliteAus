@@ -31,6 +31,8 @@ Settings live in `backend/.env` (see `.env.example`):
 | `WELCOME_WALLET_CREDIT` | Credit given to new accounts. Defaults to 5000 with demo payments, otherwise 0 |
 | `MARKETING_SPEND_MONTHLY` | Monthly marketing spend used for CAC on the admin Revenue screen |
 | `AUTO_APPROVE_VENDOR_KYC` | Approve host KYC without admin review. Defaults to `SEED_DEMO_DATA` |
+| `MARKET_TIMEZONE` | Timezone for calendar dates such as blocked days and insurance expiry. Defaults to `Australia/Melbourne` |
+| `TERMS_VERSION` | Version stored when a user accepts the terms or a renter accepts the rental agreement. Bump it when the wording changes |
 
 With `SEED_DEMO_DATA=true` you can sign in as `userdemo` / `User@123` (renter) or `vendordemo` / `Vendor@123` (host). The login screen only shows these accounts in demo mode.
 
