@@ -5,16 +5,18 @@ import { router, useFocusEffect } from "expo-router";
 
 import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/AuthContext";
+import { useAppConfig } from "@/src/appConfig";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 import type { Booking } from "@/src/types";
 import { storage } from "@/src/utils/storage";
 
 type Notif = {
   id: string;
-  type: "booking_confirmed" | "booking_cancelled" | "booking_pending" | "booking_declined" | "promo" | "system" | "welcome";
+  type: "booking_confirmed" | "booking_cancelled" | "booking_pending" | "booking_declined" | "system" | "welcome";
   title: string;
   body: string;
-  ts: number; // ms
+  ts: number;
   read?: boolean;
   href?: string;
 };
@@ -32,92 +34,92 @@ function timeAgo(ms: number) {
   return `${d}d ago`;
 }
 
-const STATIC_PROMOS: Notif[] = [
-  {
-    id: "promo_vip30",
-    type: "promo",
-    title: "VIP30 — Save 30% this week",
-    body: "Apply code VIP30 at checkout for 30% off your next reservation. Valid on all vehicles.",
-    ts: Date.now() - 1000 * 60 * 60 * 6,
-  },
-  {
-    id: "promo_weekend",
-    type: "promo",
-    title: "Weekend escape",
-    body: "Hire a Range Rover Autobiography for Mornington Peninsula — 20% off with WEEKEND20.",
-    ts: Date.now() - 1000 * 60 * 60 * 28,
-  },
-];
+type Offer = { code: string; discount_pct: number; description: string };
 
-const WELCOME: Notif = {
-  id: "welcome_001",
-  type: "welcome",
-  title: "Welcome to EliteReserve",
-  body: "Your $5,000 wallet bonus has been credited. Reserve any car instantly.",
-  ts: Date.now() - 1000 * 60 * 60 * 24 * 2,
-};
+const ts = (iso?: string | null, fallback = 0) => (iso ? new Date(iso).getTime() : fallback);
+const short = (iso: string) => new Date(iso).toLocaleDateString("en-AU", { month: "short", day: "numeric" });
+
+function bookingNotifications(b: Booking): Notif[] {
+  const created = ts(b.created_at);
+  const car = `${b.car_brand} ${b.car_model}`;
+  const items: Notif[] = [
+    {
+      id: `bk_req_${b.booking_id}`,
+      type: "booking_pending",
+      title: `Request sent · ${car}`,
+      body: "Awaiting host approval. They have 24 hours to accept, and you're only charged if they do.",
+      ts: created,
+      href: "/(tabs)/bookings",
+    },
+  ];
+  if (b.accepted_at || b.status === "upcoming" || b.status === "completed") {
+    items.push({
+      id: `bk_conf_${b.booking_id}`,
+      type: "booking_confirmed",
+      title: `Host accepted · ${car}`,
+      body: `Pickup ${short(b.pickup_datetime)} at ${b.pickup_location}. Charged $${b.total.toFixed(2)}.`,
+      ts: ts(b.accepted_at, created + 1000),
+      href: "/(tabs)/bookings",
+    });
+  }
+  if (b.status === "declined") {
+    items.push({
+      id: `bk_dec_${b.booking_id}`,
+      type: "booking_declined",
+      title: `Request declined · ${car}`,
+      body: `${b.decline_reason ?? "The host declined your request"}${b.decline_note ? ` — "${b.decline_note}"` : ""}. Nothing was charged.`,
+      ts: ts(b.responded_at, created + 1000),
+      href: "/(tabs)/bookings",
+    });
+  }
+  if (b.status === "cancelled") {
+    const refunded = (b.refund ?? 0) + (b.refund_amount ?? 0);
+    items.push({
+      id: `bk_canc_${b.booking_id}`,
+      type: "booking_cancelled",
+      title: b.accepted_at || refunded > 0 ? `Reservation cancelled · ${car}` : `Request withdrawn · ${car}`,
+      body: refunded > 0 ? `$${refunded.toFixed(2)} was refunded to your wallet.` : "Nothing was charged.",
+      ts: ts(b.refunded_at ?? b.cancelled_at, created + 2000),
+      href: "/(tabs)/bookings",
+    });
+  }
+  return items;
+}
 
 export default function Notifications() {
+  const { user } = useAuth();
+  const { welcome_credit } = useAppConfig();
   const [items, setItems] = useState<Notif[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [readSet, setReadSet] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const bookings = await api.get<Booking[]>("/bookings");
-      const fromBookings: Notif[] = bookings.flatMap((b) => {
-        const created = new Date(b.created_at).getTime();
-        const base: Notif[] = [
-          {
-            id: `bk_req_${b.booking_id}`,
-            type: "booking_pending",
-            title: `Request sent · ${b.car_brand} ${b.car_model}`,
-            body: `Awaiting host approval. They have 24 hours to accept — you're charged only if they do.`,
-            ts: created,
-            href: "/(tabs)/bookings",
-          },
-        ];
-        if (b.status === "upcoming" || b.status === "completed") {
-          base.push({
-            id: `bk_conf_${b.booking_id}`,
-            type: "booking_confirmed",
-            title: `Host accepted · ${b.car_brand} ${b.car_model}`,
-            body: `Pickup ${new Date(b.pickup_datetime).toLocaleDateString("en-AU", { month: "short", day: "numeric" })} at ${b.pickup_location}. Charged $${b.total.toFixed(2)}.`,
-            ts: created + 1000,
-            href: "/(tabs)/bookings",
-          });
-        }
-        if (b.status === "declined") {
-          base.push({
-            id: `bk_dec_${b.booking_id}`,
-            type: "booking_declined",
-            title: `Request declined · ${b.car_brand} ${b.car_model}`,
-            body: `${b.decline_reason ?? "The host declined your request"}${b.decline_note ? ` — "${b.decline_note}"` : ""}. Nothing was charged.`,
-            ts: created + 1000,
-            href: "/(tabs)/bookings",
-          });
-        }
-        if (b.status === "cancelled") {
-          base.push({
-            id: `bk_canc_${b.booking_id}`,
-            type: "booking_cancelled",
-            title: `Reservation cancelled · ${b.car_brand} ${b.car_model}`,
-            body: `Refund of $${(b.total * 0.8).toFixed(2)} credited to your wallet.`,
-            ts: created + 2000,
-            href: "/(tabs)/bookings",
-          });
-        }
-        return base;
-      });
-
-      const merged = [WELCOME, ...STATIC_PROMOS, ...fromBookings].sort((a, b) => b.ts - a.ts);
+      const [bookings, coupons] = await Promise.all([
+        api.get<Booking[]>("/bookings"),
+        api.get<Offer[]>("/coupons").catch(() => [] as Offer[]),
+      ]);
+      const welcome: Notif = {
+        id: "welcome",
+        type: "welcome",
+        title: "Welcome to EliteReserve",
+        body:
+          welcome_credit > 0
+            ? `Your $${welcome_credit.toLocaleString("en-AU")} demo wallet credit is ready. Request a car and the host has 24 hours to accept.`
+            : "Complete your renter profile, then request any car. Hosts have 24 hours to accept.",
+        ts: ts(user?.created_at, 0),
+        href: "/renter-profile",
+      };
+      const merged = [welcome, ...bookings.flatMap(bookingNotifications)].sort((a, b) => b.ts - a.ts);
       const stored = await storage.getItem<string>(READ_KEY, "[]");
       setReadSet(new Set<string>(JSON.parse(stored ?? "[]")));
       setItems(merged);
+      setOffers(coupons.slice(0, 3));
     } catch (e) {
       console.warn(e);
     }
-  }, []);
+  }, [user?.created_at, welcome_credit]);
 
   useFocusEffect(
     useCallback(() => {
@@ -126,11 +128,8 @@ export default function Notifications() {
   );
 
   useEffect(() => {
-    // mark all read on view
     if (items.length === 0) return;
-    const ids = items.map((i) => i.id);
-    storage.setItem(READ_KEY, JSON.stringify(ids));
-    setReadSet(new Set(ids));
+    storage.setItem(READ_KEY, JSON.stringify(items.map((i) => i.id)));
   }, [items]);
 
   const onRefresh = async () => {
@@ -149,8 +148,6 @@ export default function Notifications() {
         return "hourglass";
       case "booking_declined":
         return "close-circle";
-      case "promo":
-        return "pricetag";
       case "welcome":
         return "sparkles";
       default:
@@ -189,7 +186,6 @@ export default function Notifications() {
                   styles.iconWrap,
                   n.type === "booking_cancelled" && { borderColor: "rgba(255,107,107,0.4)" },
                   n.type === "booking_declined" && { borderColor: "rgba(255,107,107,0.4)" },
-                  n.type === "promo" && { borderColor: colors.borderStrong, backgroundColor: "rgba(212,175,55,0.08)" },
                 ]}
               >
                 <Ionicons
@@ -200,6 +196,7 @@ export default function Notifications() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.row}>
+                  {!readSet.has(n.id) ? <View style={styles.unreadDot} testID={`unread-${n.id}`} /> : null}
                   <Text style={styles.notifTitle} numberOfLines={1}>
                     {n.title}
                   </Text>
@@ -212,6 +209,26 @@ export default function Notifications() {
             </Pressable>
           ))
         )}
+
+        {offers.length > 0 ? (
+          <View style={styles.offers}>
+            <Text style={styles.offersTitle}>CURRENT OFFERS</Text>
+            {offers.map((o) => (
+              <Pressable
+                key={o.code}
+                testID={`offer-${o.code}`}
+                onPress={() => router.push("/coupons")}
+                style={({ pressed }) => [styles.offer, pressed && { opacity: 0.85 }]}
+              >
+                <Ionicons name="pricetag" size={14} color={colors.primary} />
+                <Text style={styles.offerCode}>{o.code}</Text>
+                <Text style={styles.offerText} numberOfLines={1}>
+                  {o.description || `${o.discount_pct}% off`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
     </Screen>
   );
@@ -243,6 +260,22 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   notifTitle: { color: colors.textPrimary, fontFamily: fonts.bodyMedium, fontSize: 13, flex: 1, paddingRight: spacing.sm },
   notifTime: { color: colors.textMuted, fontSize: 10, fontFamily: fonts.body },
+  unreadDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary, marginRight: 6 },
+  offers: { marginTop: spacing.lg },
+  offersTitle: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontFamily: fonts.bodyBold, marginBottom: spacing.sm },
+  offer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    marginBottom: spacing.xs,
+  },
+  offerCode: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 1 },
+  offerText: { flex: 1, color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12 },
   notifBody: { color: colors.textSecondary, fontSize: 12, lineHeight: 18, fontFamily: fonts.body, marginTop: 4 },
   empty: { alignItems: "center", marginTop: 80, gap: spacing.sm },
   emptyText: { color: colors.textPrimary, fontFamily: fonts.displayMedium, fontSize: 20, marginTop: spacing.md },

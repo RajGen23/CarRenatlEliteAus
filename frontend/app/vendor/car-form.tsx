@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -114,13 +114,13 @@ export default function VendorCarForm() {
 
   const submit = async () => {
     if (!form.brand || !form.model || !form.price_per_day) {
-      return Alert.alert("Required", "Brand, model and daily price are required.");
+      return notify("Required", "Brand, model and daily price are required.");
     }
     if (!isIsoDate(form.insurance_expiry)) {
-      return Alert.alert("Insurance expiry", "Enter the insurance expiry date as YYYY-MM-DD.");
+      return notify("Insurance expiry", "Enter the insurance expiry date as YYYY-MM-DD.");
     }
     if (!hasDocument("insurance") || !hasDocument("registration")) {
-      return Alert.alert("Documents required", "Upload both the insurance and registration certificates.");
+      return notify("Documents required", "Upload both the insurance and registration certificates.");
     }
     setSubmitting(true);
     try {
@@ -159,7 +159,7 @@ export default function VendorCarForm() {
       }
       router.replace("/(vendor)/fleet");
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally {
       setSubmitting(false);
     }
@@ -231,7 +231,11 @@ export default function VendorCarForm() {
         <Section title="MEDIA">
           <Field label="HERO IMAGE URL" value={form.image} onChangeText={(v) => set("image", v)} placeholder="https://..." testID="f-image" />
           <View style={styles.imagePreview}>
-            {form.image ? <Text style={styles.previewHint}>Preview</Text> : null}
+            {/^https?:\/\//.test(form.image) ? (
+              <Image source={{ uri: form.image }} style={styles.previewImage} resizeMode="cover" />
+            ) : (
+              <Text style={styles.previewHint}>Paste an image link to see a preview</Text>
+            )}
           </View>
         </Section>
 
@@ -362,7 +366,8 @@ const styles = StyleSheet.create({
   pillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   pillText: { color: colors.textPrimary, fontFamily: fonts.bodyMedium, fontSize: 12 },
   pillTextActive: { color: "#000" },
-  imagePreview: { height: 80, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, marginTop: spacing.sm, alignItems: "center", justifyContent: "center" },
+  previewImage: { width: "100%", height: "100%" },
+  imagePreview: { height: 140, overflow: "hidden", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, marginTop: spacing.sm, alignItems: "center", justifyContent: "center" },
   previewHint: { color: colors.textMuted, fontSize: 11, fontFamily: fonts.bodyMedium },
   uploadCard: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,

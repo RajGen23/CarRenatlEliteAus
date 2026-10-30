@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 
 type CarLite = {
   car_id: string;
   brand: string;
   model: string;
   blocked_dates?: string[];
+  booked_dates?: string[];
 };
 
 function toIsoDate(d: Date) {
@@ -48,12 +50,13 @@ export default function VendorCalendar() {
       setCar(c);
       setLoading(false);
     }).catch((e) => {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
       setLoading(false);
     });
   }, [id]);
 
   const blocked = useMemo(() => new Set(car?.blocked_dates ?? []), [car]);
+  const booked = useMemo(() => new Set(car?.booked_dates ?? []), [car]);
   const days = useMemo(() => monthDays(cursor.getFullYear(), cursor.getMonth()), [cursor]);
   const today = useMemo(() => toIsoDate(new Date()), []);
 
@@ -67,7 +70,7 @@ export default function VendorCalendar() {
   };
 
   const block = async () => {
-    if (selected.size === 0) return Alert.alert("Select dates", "Tap dates to select before blocking.");
+    if (selected.size === 0) return notify("Select dates", "Tap dates to select before blocking.");
     setSaving(true);
     try {
       await api.post(`/vendor/cars/${id}/block`, { dates: Array.from(selected) });
@@ -75,12 +78,12 @@ export default function VendorCalendar() {
       setCar(c);
       setSelected(new Set());
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally { setSaving(false); }
   };
 
   const unblock = async () => {
-    if (selected.size === 0) return Alert.alert("Select dates", "Tap blocked dates to unblock.");
+    if (selected.size === 0) return notify("Select dates", "Tap blocked dates to unblock.");
     setSaving(true);
     try {
       await api.post(`/vendor/cars/${id}/unblock`, { dates: Array.from(selected) });
@@ -88,7 +91,7 @@ export default function VendorCalendar() {
       setCar(c);
       setSelected(new Set());
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally { setSaving(false); }
   };
 
@@ -134,17 +137,20 @@ export default function VendorCalendar() {
             const iso = toIsoDate(d);
             const isPast = iso < today;
             const isBlocked = blocked.has(iso);
+            const isBooked = booked.has(iso);
             const isSelected = selected.has(iso);
             return (
               <Pressable
                 key={idx}
                 testID={`cal-day-${iso}`}
-                disabled={isPast}
+                accessibilityLabel={isBooked ? `${iso}, booked` : isBlocked ? `${iso}, blocked` : iso}
+                disabled={isPast || isBooked}
                 onPress={() => togglePick(iso)}
                 style={[
                   styles.cell,
                   isPast && styles.cellPast,
                   isBlocked && styles.cellBlocked,
+                  isBooked && styles.cellBooked,
                   isSelected && styles.cellSelected,
                 ]}
               >
@@ -159,6 +165,7 @@ export default function VendorCalendar() {
                   {d.getDate()}
                 </Text>
                 {isBlocked ? <View style={styles.blockedDot} /> : null}
+                {isBooked ? <View style={styles.bookedDot} /> : null}
               </Pressable>
             );
           })}
@@ -167,6 +174,7 @@ export default function VendorCalendar() {
         <View style={styles.legend}>
           <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.primary }]} /><Text style={styles.lText}>Selected</Text></View>
           <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.error }]} /><Text style={styles.lText}>Blocked</Text></View>
+          <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.success }]} /><Text style={styles.lText}>Booked</Text></View>
           <View style={styles.legendItem}><View style={[styles.lDot, { backgroundColor: colors.textMuted }]} /><Text style={styles.lText}>Past</Text></View>
         </View>
 
@@ -195,7 +203,7 @@ export default function VendorCalendar() {
           </Pressable>
         </View>
 
-        <Text style={styles.hint}>Tap to select multiple dates. Blocked dates will not be bookable by renters.</Text>
+        <Text style={styles.hint}>Tap to select dates. Blocked dates can&apos;t be booked by renters. Booked dates already have a confirmed trip.</Text>
       </ScrollView>
     </Screen>
   );
@@ -223,6 +231,8 @@ const styles = StyleSheet.create({
   cellTextBlocked: { color: colors.error },
   cellTextSelected: { color: "#000", fontFamily: fonts.bodyBold },
   blockedDot: { position: "absolute", bottom: 4, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.error },
+  cellBooked: { borderColor: "rgba(124,227,166,0.35)", backgroundColor: "rgba(124,227,166,0.08)" },
+  bookedDot: { position: "absolute", bottom: 4, width: 4, height: 4, borderRadius: 2, backgroundColor: colors.success },
   legend: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, flexWrap: "wrap" },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   lDot: { width: 8, height: 8, borderRadius: 4 },

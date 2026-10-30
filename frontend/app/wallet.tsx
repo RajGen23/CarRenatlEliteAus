@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
@@ -8,6 +8,7 @@ import { api } from "@/src/api";
 import { useAppConfig } from "@/src/appConfig";
 import { useAuth } from "@/src/AuthContext";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 
 const AMOUNTS = [100, 500, 1000, 2500, 5000];
 
@@ -21,9 +22,9 @@ export default function Wallet() {
     try {
       await api.post("/wallet/topup", { amount });
       await refresh();
-      Alert.alert("Success", `$${amount.toFixed(2)} added to your wallet.`);
+      notify("Success", `$${amount.toFixed(2)} added to your wallet.`);
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally {
       setTopping(null);
     }

@@ -1,31 +1,31 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 
 export default function ReviewScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, booking } = useLocalSearchParams<{ id: string; booking?: string }>();
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     if (!comment.trim()) {
-      Alert.alert("Required", "Please write a comment.");
+      notify("Required", "Please write a comment.");
       return;
     }
     setSubmitting(true);
     try {
-      await api.post("/reviews", { car_id: id, rating, comment });
-      Alert.alert("Thank you", "Your review has been posted.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      await api.post("/reviews", { car_id: id, booking_id: booking || undefined, rating, comment });
+      notify("Thank you", "Your review has been posted.");
+      router.back();
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally {
       setSubmitting(false);
     }

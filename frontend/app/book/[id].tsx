@@ -7,7 +7,6 @@ import {
   Pressable,
   TextInput,
   Image,
-  Alert,
   ActivityIndicator,
   Animated,
 } from "react-native";
@@ -17,10 +16,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AgreementCheckbox } from "@/src/components/AgreementCheckbox";
 import { Screen } from "@/src/components/Screen";
+import { UnavailableState } from "@/src/components/UnavailableState";
 import { DateTimeModal } from "@/src/components/DateTimeModal";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { confirm, notify } from "@/src/utils/dialog";
 import type { Car, CarAvailability } from "@/src/types";
 
 function addDays(d: Date, n: number) {
@@ -75,6 +76,7 @@ export default function Book() {
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
   const [availability, setAvailability] = useState<CarAvailability | null>(null);
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
   // Animated marker for the map preview
   const pulse = useRef(new Animated.Value(0)).current;
@@ -90,10 +92,11 @@ export default function Book() {
 
   const load = useCallback(async () => {
     try {
-      const c = await api.get<Car>(`/cars/${id}`);
-      setCar(c);
-    } catch (e) {
-      console.warn(e);
+      setCar(await api.get<Car>(`/cars/${id}`));
+      setNotFound(false);
+    } catch {
+      setNotFound(true);
+      return;
     }
     try {
       const p = await api.get<{ complete: boolean }>("/profile/renter");
@@ -141,7 +144,7 @@ export default function Book() {
       });
       setDiscount({ code: res.code, amount: res.discount });
     } catch (e: any) {
-      Alert.alert("Invalid code", e.message);
+      notify("Invalid code", e.message);
       setDiscount(null);
     }
   };
@@ -155,7 +158,7 @@ export default function Book() {
       if (dropDate <= selected) setDropDate(addDays(selected, 1));
     } else if (which === "drop") {
       if (selected <= pickupDate) {
-        Alert.alert("Invalid", "Drop must be after pickup");
+        notify("Invalid", "Drop must be after pickup");
         return;
       }
       setDropDate(selected);
@@ -165,34 +168,36 @@ export default function Book() {
   const confirmBooking = async () => {
     if (!car) return;
     if (!pickup.trim() || !drop.trim()) {
-      Alert.alert("Required", "Please enter pickup and drop locations");
+      notify("Required", "Please enter pickup and drop locations");
       return;
     }
     if (profileComplete === false) {
-      router.push("/renter-profile");
-      return;
+      const latest = await api.get<{ complete: boolean }>("/profile/renter").catch(() => ({ complete: false }));
+      setProfileComplete(latest.complete);
+      if (!latest.complete) {
+        router.push("/renter-profile");
+        return;
+      }
     }
     if (pickupDate <= new Date()) {
-      Alert.alert("Pickup time", "Pickup time must be in the future.");
+      notify("Pickup time", "Pickup time must be in the future.");
       return;
     }
     if (unavailable.length) {
-      Alert.alert("Dates unavailable", "This car is already booked or blocked for some of those dates.");
+      notify("Dates unavailable", "This car is already booked or blocked for some of those dates.");
       return;
     }
     if (!acceptTerms) {
-      Alert.alert("Rental terms", "Please accept the rental agreement and cancellation policy.");
+      notify("Rental terms", "Please accept the rental agreement and cancellation policy.");
       return;
     }
     if ((user?.wallet_balance ?? 0) < total) {
-      Alert.alert(
+      const topUp = await confirm(
         "Insufficient balance",
         `Top up your wallet to complete this booking. Need $${total.toFixed(2)}.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Top up", onPress: () => router.push("/wallet") },
-        ]
+        "Top up",
       );
+      if (topUp) router.push("/wallet");
       return;
     }
     setSubmitting(true);
@@ -210,11 +215,21 @@ export default function Book() {
       await refresh();
       router.replace(`/booking-success?id=${res.booking_id}`);
     } catch (e: any) {
-      Alert.alert("Request failed", e.message);
+      notify("Request failed", e.message);
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (notFound) {
+    return (
+      <UnavailableState
+        testID="book-unavailable"
+        title="This car can't be booked"
+        message="It's no longer available on EliteReserve. Pick another car from the fleet."
+      />
+    );
+  }
 
   if (!car) {
     return (

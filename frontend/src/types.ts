@@ -67,6 +67,13 @@ export interface Booking {
   request_expires_at?: string | null;
   decline_reason?: string | null;
   decline_note?: string | null;
+  accepted_at?: string | null;
+  responded_at?: string | null;
+  cancelled_at?: string | null;
+  completed_at?: string | null;
+  refund?: number | null;
+  refund_amount?: number | null;
+  refunded_at?: string | null;
 }
 
 export interface RenterProfile {
@@ -105,6 +112,7 @@ export interface User {
   role?: "user" | "vendor" | "admin";
   status?: "active" | "blocked" | "suspended";
   verified?: boolean;
+  created_at?: string | null;
 }
 
 export interface Review {

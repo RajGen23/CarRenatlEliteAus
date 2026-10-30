@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Image, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import { Screen } from "@/src/components/Screen";
 import { ConfirmModal } from "@/src/components/ConfirmModal";
@@ -183,13 +183,22 @@ export default function Bookings() {
                 <Text style={styles.totalLabel}>Total · {b.days} {b.days === 1 ? "day" : "days"}</Text>
                 <Text style={styles.totalVal}>${b.total.toFixed(2)}</Text>
               </View>
-              {(b.status === "upcoming" || b.status === "pending") && (
+              {(b.status === "pending" || (b.status === "upcoming" && new Date(b.pickup_datetime) > new Date())) && (
                 <Pressable
                   testID={`cancel-${b.booking_id}`}
                   onPress={() => setPending(b)}
                   style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.8 }]}
                 >
                   <Text style={styles.cancelText}>{b.status === "pending" ? "Withdraw" : "Cancel"}</Text>
+                </Pressable>
+              )}
+              {b.status === "completed" && (
+                <Pressable
+                  testID={`review-${b.booking_id}`}
+                  onPress={() => router.push(`/review/${b.car_id}?booking=${b.booking_id}`)}
+                  style={({ pressed }) => [styles.reviewBtn, pressed && { opacity: 0.8 }]}
+                >
+                  <Text style={styles.reviewText}>Rate trip</Text>
                 </Pressable>
               )}
             </View>
@@ -201,6 +210,16 @@ export default function Bookings() {
             <Text style={styles.emptyText}>
               {tab === "pending" ? "No pending requests" : `No ${TAB_LABELS[tab].toLowerCase()} bookings yet`}
             </Text>
+            {tab === "pending" || tab === "upcoming" ? (
+              <Pressable
+                testID="bookings-browse"
+                onPress={() => router.push("/(tabs)/cars")}
+                style={({ pressed }) => [styles.emptyCta, pressed && { opacity: 0.85 }]}
+              >
+                <Text style={styles.emptyCtaText}>Browse cars</Text>
+                <Ionicons name="arrow-forward" size={14} color="#000" />
+              </Pressable>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -315,7 +334,25 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,107,107,0.4)",
     backgroundColor: "rgba(255,107,107,0.08)",
   },
+  reviewBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  reviewText: { color: colors.primary, fontSize: 12, fontFamily: fonts.bodyBold, letterSpacing: 1 },
   cancelText: { color: colors.error, fontSize: 12, fontFamily: fonts.bodyBold, letterSpacing: 1 },
   empty: { alignItems: "center", marginTop: spacing.xxl, gap: spacing.md },
   emptyText: { color: colors.textMuted, fontFamily: fonts.body },
+  emptyCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
+    borderRadius: radius.full,
+  },
+  emptyCtaText: { color: "#000", fontFamily: fonts.bodyBold, fontSize: 13, letterSpacing: 0.5 },
 });

@@ -6,7 +6,6 @@ import {
   ScrollView,
   Pressable,
   Image,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -15,8 +14,10 @@ import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Screen } from "@/src/components/Screen";
+import { UnavailableState } from "@/src/components/UnavailableState";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 import type { Car, Review } from "@/src/types";
 
 export default function CarDetail() {
@@ -27,18 +28,25 @@ export default function CarDetail() {
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [wishlisted, setWishlisted] = useState(false);
   const [canReview, setCanReview] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
   const [galleryWidth, setGalleryWidth] = useState(0);
   const galleryRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     try {
-      const [c, rv, wl] = await Promise.all([
-        api.get<Car>(`/cars/${id}`),
+      setCar(await api.get<Car>(`/cars/${id}`));
+      setNotFound(false);
+    } catch {
+      setNotFound(true);
+      setLoading(false);
+      return;
+    }
+    try {
+      const [rv, wl] = await Promise.all([
         api.get<Review[]>(`/cars/${id}/reviews`),
         api.get<Car[]>("/wishlist"),
       ]);
-      setCar(c);
       setReviews(rv);
       setWishlisted(wl.some((w) => w.car_id === id));
     } catch (e) {
@@ -67,9 +75,19 @@ export default function CarDetail() {
       }
       setWishlisted(!wishlisted);
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     }
   };
+
+  if (notFound) {
+    return (
+      <UnavailableState
+        testID="car-unavailable"
+        title="This car isn't available"
+        message="It may have been booked out, paused by its host or removed from the fleet."
+      />
+    );
+  }
 
   if (loading || !car) {
     return (

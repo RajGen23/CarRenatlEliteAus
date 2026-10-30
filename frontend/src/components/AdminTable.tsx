@@ -1,12 +1,15 @@
 import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { colors, fonts, radius, spacing } from "@/src/theme";
 
 export type Col<T> = { key: string; label: string; flex?: number; render?: (row: T) => React.ReactNode };
 
+const NARROW_TABLE_MIN_WIDTH = 860;
+
 export function AdminTable<T extends { [k: string]: any }>({ rows, cols, empty }: { rows: T[]; cols: Col<T>[]; empty?: string }) {
-  return (
-    <View style={s.wrap}>
+  const { width } = useWindowDimensions();
+  const table = (
+    <View style={[s.wrap, width < NARROW_TABLE_MIN_WIDTH && { width: NARROW_TABLE_MIN_WIDTH }]}>
       <View style={[s.row, s.head]}>
         {cols.map((c) => (
           <View key={c.key} style={{ flex: c.flex ?? 1 }}>
@@ -28,6 +31,12 @@ export function AdminTable<T extends { [k: string]: any }>({ rows, cols, empty }
         ))
       )}
     </View>
+  );
+  if (width >= NARROW_TABLE_MIN_WIDTH) return table;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ paddingBottom: spacing.sm }}>
+      {table}
+    </ScrollView>
   );
 }
 

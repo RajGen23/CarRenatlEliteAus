@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
 import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
+import { useAuth } from "@/src/AuthContext";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 
 type Form = {
   company: string;
@@ -20,6 +22,7 @@ type Form = {
 const STEPS = ["Company", "Identity", "Payouts"] as const;
 
 export default function VendorOnboarding() {
+  const { refresh } = useAuth();
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<Form>({
@@ -35,18 +38,19 @@ export default function VendorOnboarding() {
   const set = (k: keyof Form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const next = async () => {
-    if (step === 0 && (!form.company || !form.phone)) return Alert.alert("Required", "Company and phone are required.");
-    if (step === 1 && !form.license_no) return Alert.alert("Required", "Driver license number is required.");
+    if (step === 0 && (!form.company || !form.phone)) return notify("Required", "Company and phone are required.");
+    if (step === 1 && !form.license_no) return notify("Required", "Driver license number is required.");
     if (step < 2) return setStep(step + 1);
     if (!form.bank_account_name || !form.bank_bsb || !form.bank_account_no) {
-      return Alert.alert("Required", "All bank fields are required for payouts.");
+      return notify("Required", "All bank fields are required for payouts.");
     }
     setSubmitting(true);
     try {
       await api.post("/vendor/onboard", form);
+      await refresh();
       router.replace("/(vendor)/dashboard");
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally {
       setSubmitting(false);
     }

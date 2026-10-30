@@ -4,8 +4,9 @@ import { AdminShell } from "@/src/components/AdminShell";
 import { AdminTable, Badge, ActionBtn } from "@/src/components/AdminTable";
 import { api } from "@/src/api";
 import { colors, fonts, radius } from "@/src/theme";
+import { confirm, notify } from "@/src/utils/dialog";
 
-type B = { booking_id: string; customer_name?: string; customer_email?: string; car_brand: string; car_model: string; pickup_datetime: string; days: number; total: number; commission: number; net: number; status: string; refund_status?: string };
+type B = { booking_id: string; customer_name?: string; customer_email?: string; car_brand: string; car_model: string; pickup_datetime: string; days: number; total: number; commission: number; net: number; status: string; refund_status?: string; refundable: number };
 
 export default function AdminBookings() {
   const [status, setStatus] = useState("all");
@@ -14,14 +15,29 @@ export default function AdminBookings() {
   const load = useCallback(async () => { setRows(await api.get<B[]>(`/admin/bookings?status=${status}&refund=${refund}`)); }, [status, refund]);
   useEffect(() => { load(); }, [load]);
 
-  const doRefund = async (b: B) => { await api.post(`/admin/bookings/${b.booking_id}/refund`, { amount: b.total, reason: "Approved by admin" }); load(); };
+  const doRefund = async (b: B) => {
+    const ok = await confirm(
+      "Refund this booking?",
+      `$${b.refundable.toFixed(2)} goes back to ${b.customer_name ?? "the renter"}'s wallet and the booking is cancelled.`,
+      "Refund",
+      "Keep booking",
+      true,
+    );
+    if (!ok) return;
+    try {
+      await api.post(`/admin/bookings/${b.booking_id}/refund`, { reason: "Approved by admin" });
+    } catch (e: any) {
+      notify("Refund failed", e.message);
+    }
+    load();
+  };
 
   return (
     <AdminShell title="Bookings">
       <View style={s.filterRow}>
         <View style={s.filterGroup}>
-          {["all", "upcoming", "completed", "cancelled"].map((f) => (
-            <Pressable key={f} onPress={() => setStatus(f)} style={[s.chip, status === f && s.chipActive]}>
+          {["all", "pending", "upcoming", "completed", "cancelled", "declined"].map((f) => (
+            <Pressable key={f} testID={`filter-${f}`} onPress={() => setStatus(f)} style={[s.chip, status === f && s.chipActive]}>
               <Text style={[s.chipText, status === f && s.chipTextActive]}>{f.toUpperCase()}</Text>
             </Pressable>
           ))}
@@ -48,7 +64,7 @@ export default function AdminBookings() {
           { key: "total", label: "TOTAL", render: (r) => <Text style={s.cellMain}>${r.total.toFixed(0)}</Text> },
           { key: "commission", label: "COMMISSION", render: (r) => <Text style={s.cellMain}>${r.commission.toFixed(0)}</Text> },
           { key: "status", label: "STATUS", render: (r) => {
-            const t = r.status === "completed" ? "ok" : r.status === "cancelled" ? "danger" : "warn";
+            const t = r.status === "completed" ? "ok" : r.status === "cancelled" || r.status === "declined" ? "danger" : "warn";
             return <Badge tone={t as any} label={r.status.toUpperCase()} />;
           } },
           { key: "refund", label: "REFUND", render: (r) => {
@@ -57,7 +73,7 @@ export default function AdminBookings() {
             return <Text style={s.cellSub}>—</Text>;
           } },
           { key: "actions", label: "", flex: 0.9, render: (r) => (
-            (r.status !== "cancelled" || r.refund_status === "requested") ? <ActionBtn label="Refund" tone="danger" onPress={() => doRefund(r)} /> : <Text style={s.cellSub}>—</Text>
+            r.refundable > 0 ? <ActionBtn testID={`refund-${r.booking_id}`} label="Refund" tone="danger" onPress={() => doRefund(r)} /> : <Text style={s.cellSub}>—</Text>
           ) },
         ]}
         empty="No bookings match"
@@ -67,8 +83,8 @@ export default function AdminBookings() {
 }
 
 const s = StyleSheet.create({
-  filterRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  filterGroup: { flexDirection: "row", gap: 6 },
+  filterRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 12 },
+  filterGroup: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.textMuted, fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1 },

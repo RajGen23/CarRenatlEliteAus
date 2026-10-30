@@ -46,14 +46,18 @@ export default function RenterProfileScreen() {
       (k) => !String(form[k] ?? "").trim()
     );
     if (missing.length) {
-      notify("Missing details", "Please fill every field — hosts review this before approving a trip.");
+      notify("Missing details", "Please fill in every field before saving.");
       return;
     }
     setSaving(true);
     try {
       await api.patch("/profile/renter", form);
-      notify("Profile saved", "Hosts will now see your verified details with each request.");
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        notify("Details saved", "You're ready to request a booking.");
+        router.replace("/(tabs)/profile");
+      }
     } catch (e: any) {
       notify("Could not save", e.message);
     } finally {
@@ -91,30 +95,31 @@ export default function RenterProfileScreen() {
         <View style={styles.note}>
           <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
           <Text style={styles.noteText}>
-            Hosts see these details when reviewing your request. Accurate info gets approved faster.
+            Hosts see your name, trip history and verification status. Your phone and licence number are
+            shared once they accept, and your address and date of birth stay private.
           </Text>
         </View>
 
         <Text style={styles.sectionTitle}>IDENTITY</Text>
-        <Field label="FULL NAME (AS ON LICENCE)" value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="Alexander Whitmore" testID="rp-name" />
+        <Field label="FULL NAME (AS ON LICENCE)" value={form.full_name} onChangeText={(v) => set("full_name", v)} placeholder="As shown on your licence" testID="rp-name" />
         <Field label="PHONE" value={form.phone} onChangeText={(v) => set("phone", v)} placeholder="+61 4XX XXX XXX" keyboardType="phone-pad" testID="rp-phone" />
-        <Field label="DATE OF BIRTH (YYYY-MM-DD)" value={form.dob} onChangeText={(v) => set("dob", v)} placeholder="1992-04-18" testID="rp-dob" />
+        <Field label="DATE OF BIRTH (YYYY-MM-DD)" value={form.dob} onChangeText={(v) => set("dob", v)} placeholder="YYYY-MM-DD" testID="rp-dob" />
 
         <Text style={styles.sectionTitle}>RESIDENTIAL ADDRESS</Text>
-        <Field label="STREET ADDRESS" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} placeholder="18 Southbank Blvd" testID="rp-address" />
-        <Field label="CITY / SUBURB" value={form.city} onChangeText={(v) => set("city", v)} placeholder="Melbourne" testID="rp-city" />
+        <Field label="STREET ADDRESS" value={form.address_line1} onChangeText={(v) => set("address_line1", v)} placeholder="Street number and name" testID="rp-address" />
+        <Field label="CITY / SUBURB" value={form.city} onChangeText={(v) => set("city", v)} placeholder="City or suburb" testID="rp-city" />
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Field label="STATE" value={form.state} onChangeText={(v) => set("state", v.toUpperCase())} placeholder="VIC" testID="rp-state" />
           </View>
           <View style={{ flex: 1 }}>
-            <Field label="POSTCODE" value={form.postcode} onChangeText={(v) => set("postcode", v)} placeholder="3006" keyboardType="number-pad" testID="rp-postcode" />
+            <Field label="POSTCODE" value={form.postcode} onChangeText={(v) => set("postcode", v)} placeholder="0000" keyboardType="number-pad" testID="rp-postcode" />
           </View>
         </View>
 
         <Text style={styles.sectionTitle}>DRIVER LICENCE</Text>
-        <Field label="LICENCE NUMBER" value={form.license_no} onChangeText={(v) => set("license_no", v)} placeholder="VIC-DL-556231" testID="rp-license" />
-        <Field label="EXPIRY (YYYY-MM-DD)" value={form.license_expiry} onChangeText={(v) => set("license_expiry", v)} placeholder="2029-04-18" testID="rp-license-expiry" />
+        <Field label="LICENCE NUMBER" value={form.license_no} onChangeText={(v) => set("license_no", v)} placeholder="Licence number" testID="rp-license" />
+        <Field label="EXPIRY (YYYY-MM-DD)" value={form.license_expiry} onChangeText={(v) => set("license_expiry", v)} placeholder="YYYY-MM-DD" testID="rp-license-expiry" />
 
         <Pressable
           testID="rp-save"

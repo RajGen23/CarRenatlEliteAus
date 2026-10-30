@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 
 import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 
 type Revenue = {
   gross: number;
@@ -36,16 +37,16 @@ export default function VendorEarnings() {
 
   const requestPayout = async () => {
     const amt = parseFloat(amount);
-    if (!amt || amt <= 0) return Alert.alert("Enter amount", "Enter a positive amount");
-    if (data && amt > data.available) return Alert.alert("Too high", `Max available: $${data.available.toFixed(2)}`);
+    if (!amt || amt <= 0) return notify("Enter amount", "Enter a positive amount");
+    if (data && amt > data.available) return notify("Too high", `Max available: $${data.available.toFixed(2)}`);
     setSubmitting(true);
     try {
       await api.post("/vendor/payouts", { amount: amt });
       setAmount("");
       await load();
-      Alert.alert("Payout requested", "We'll transfer to your bank within 1–2 business days.");
+      notify("Payout requested", "We'll transfer to your bank within 1–2 business days.");
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally {
       setSubmitting(false);
     }

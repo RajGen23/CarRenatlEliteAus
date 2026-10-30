@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
@@ -7,6 +7,7 @@ import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 
 type VendorMe = {
   is_vendor: boolean;
@@ -54,7 +55,7 @@ export default function VendorProfile() {
           setKyc(p.kyc_status || "pending");
         }
       } catch (e: any) {
-        Alert.alert("Error", e.message);
+        notify("Error", e.message);
       } finally {
         setLoading(false);
       }
@@ -64,13 +65,13 @@ export default function VendorProfile() {
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const save = async () => {
-    if (!form.company || !form.phone) return Alert.alert("Required", "Company and phone are required.");
+    if (!form.company || !form.phone) return notify("Required", "Company and phone are required.");
     setSaving(true);
     try {
       await api.patch("/vendor/profile", form);
-      Alert.alert("Saved", "Your host profile has been updated.");
+      notify("Saved", "Your host profile has been updated.");
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     } finally {
       setSaving(false);
     }

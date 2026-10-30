@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, RefreshControl, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, RefreshControl } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 
@@ -7,6 +7,7 @@ import { Screen } from "@/src/components/Screen";
 import { ConfirmModal } from "@/src/components/ConfirmModal";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
 import type { Car, ListingStatus } from "@/src/types";
 
 const LISTING_LABELS: Record<ListingStatus, { label: string; tone: "ok" | "warn" | "danger" }> = {
@@ -47,7 +48,7 @@ export default function VendorFleet() {
       setToDelete(null);
       await load();
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      notify("Error", e.message);
     }
   };
 

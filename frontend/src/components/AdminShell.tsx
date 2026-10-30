@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Pressable, ScrollView, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, usePathname } from "expo-router";
 import { useAuth } from "@/src/AuthContext";
@@ -42,20 +42,29 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+const COMPACT_WIDTH = 900;
+
 export function AdminShell({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const compact = width < COMPACT_WIDTH;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const go = (href: string) => {
+    setMenuOpen(false);
+    router.push(href as any);
+  };
 
   const doLogout = async () => {
     await logout();
     router.replace("/login");
   };
 
-  return (
-    <View style={styles.root}>
-      <View style={styles.sidebar}>
+  const sidebar = (
+      <View style={[styles.sidebar, compact && styles.sidebarOverlay]}>
         <View style={styles.brandRow}>
-          <View style={styles.brandRing}><Text style={styles.brandText}>lD</Text></View>
+          <View style={styles.brandRing}><Text style={styles.brandText}>ER</Text></View>
           <View>
             <Text style={styles.brandName}>EliteReserve</Text>
             <Text style={styles.brandSub}>ADMIN · MELBOURNE</Text>
@@ -73,7 +82,7 @@ export function AdminShell({ title, children, action }: { title: string; childre
                     <Pressable
                       key={n.href}
                       testID={`nav-${n.label.toLowerCase()}`}
-                      onPress={() => router.push(n.href as any)}
+                      onPress={() => go(n.href)}
                       style={[styles.navItem, active && styles.navItemActive]}
                     >
                       <Ionicons name={n.icon} size={16} color={active ? colors.primary : colors.textMuted} />
@@ -98,17 +107,44 @@ export function AdminShell({ title, children, action }: { title: string; childre
           </Pressable>
         </View>
       </View>
+  );
+
+  return (
+    <View style={[styles.root, compact && styles.rootCompact]}>
+      {!compact ? sidebar : null}
 
       <View style={styles.main}>
-        <View style={styles.topBar}>
-          <Text style={styles.title}>{title}</Text>
+        <View style={[styles.topBar, compact && styles.topBarCompact]}>
+          {compact ? (
+            <Pressable
+              testID="admin-menu"
+              accessibilityLabel="Open menu"
+              onPress={() => setMenuOpen(true)}
+              style={styles.menuBtn}
+            >
+              <Ionicons name="menu" size={20} color={colors.primary} />
+            </Pressable>
+          ) : null}
+          <Text style={[styles.title, compact && styles.titleCompact]} numberOfLines={1}>{title}</Text>
           <View style={{ flex: 1 }} />
           {action}
         </View>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scroll, compact && styles.scrollCompact]} showsVerticalScrollIndicator={false}>
           {children}
         </ScrollView>
       </View>
+
+      {compact && menuOpen ? (
+        <View style={StyleSheet.absoluteFill}>
+          <Pressable
+            testID="admin-menu-backdrop"
+            accessibilityLabel="Close menu"
+            onPress={() => setMenuOpen(false)}
+            style={styles.backdrop}
+          />
+          {sidebar}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -140,6 +176,13 @@ const styles = StyleSheet.create({
   adminName: { color: colors.textPrimary, fontFamily: fonts.bodyBold, fontSize: 12 },
   adminEmail: { color: colors.textMuted, fontSize: 10, fontFamily: fonts.body, marginTop: 1 },
   logoutBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  rootCompact: { flexDirection: "column" },
+  sidebarOverlay: { position: "absolute", top: 0, bottom: 0, left: 0, width: 260 },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
+  menuBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", marginRight: spacing.sm },
+  topBarCompact: { paddingHorizontal: spacing.md },
+  titleCompact: { fontSize: 18, flexShrink: 1 },
+  scrollCompact: { padding: spacing.md },
   main: { flex: 1 },
   topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border },
   title: { color: colors.textPrimary, fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.4 },

@@ -82,7 +82,7 @@ export default function VendorLayout() {
         }}
       />
       <Tabs.Screen
-        name="bookings"
+        name="reservations"
         options={{
           title: "Bookings",
           tabBarIcon: ({ color, focused }) => (
