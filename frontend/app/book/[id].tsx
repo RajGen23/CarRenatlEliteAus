@@ -15,12 +15,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AgreementCheckbox } from "@/src/components/AgreementCheckbox";
 import { Screen } from "@/src/components/Screen";
 import { DateTimeModal } from "@/src/components/DateTimeModal";
 import { api } from "@/src/api";
 import { useAuth } from "@/src/AuthContext";
 import { colors, fonts, radius, spacing } from "@/src/theme";
-import type { Car } from "@/src/types";
+import type { Car, CarAvailability } from "@/src/types";
 
 function addDays(d: Date, n: number) {
   const r = new Date(d);
@@ -32,6 +33,23 @@ function daysBetween(a: Date, b: Date) {
   const ms = b.getTime() - a.getTime();
   return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 }
+
+function toLocalIsoDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function datesBetween(a: Date, b: Date) {
+  const out: string[] = [];
+  const cur = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const end = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  while (cur <= end) {
+    out.push(toLocalIsoDate(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return out;
+}
+
+const formatDay = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "short" });
 
 const formatDateTime = (d: Date) =>
   d.toLocaleString("en-US", {
@@ -55,6 +73,8 @@ export default function Book() {
   const [discount, setDiscount] = useState<{ code: string; amount: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
+  const [availability, setAvailability] = useState<CarAvailability | null>(null);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   // Animated marker for the map preview
   const pulse = useRef(new Animated.Value(0)).current;
@@ -81,6 +101,11 @@ export default function Book() {
     } catch (e) {
       console.warn(e);
     }
+    try {
+      setAvailability(await api.get<CarAvailability>(`/cars/${id}/availability`));
+    } catch (e) {
+      console.warn(e);
+    }
   }, [id]);
 
   useFocusEffect(
@@ -90,6 +115,18 @@ export default function Book() {
   );
 
   const days = useMemo(() => daysBetween(pickupDate, dropDate), [pickupDate, dropDate]);
+
+  const unavailable = useMemo(() => {
+    if (!availability) return [] as string[];
+    const clashes = availability.booked
+      .map((r) => ({ start: new Date(r.start), end: new Date(r.end) }))
+      .filter((r) => r.start < dropDate && r.end > pickupDate)
+      .map((r) => `${formatDay(r.start)} – ${formatDay(r.end)}`);
+    const blocked = new Set(availability.blocked_dates);
+    const blockedHits = datesBetween(pickupDate, dropDate).filter((d) => blocked.has(d));
+    if (blockedHits.length) clashes.push(...blockedHits.map((d) => formatDay(new Date(`${d}T00:00:00`))));
+    return clashes;
+  }, [availability, pickupDate, dropDate]);
   const subtotal = useMemo(() => (car ? car.price_per_day * days : 0), [car, days]);
   const discountAmt = discount?.amount ?? 0;
   const taxes = useMemo(() => Math.round((subtotal - discountAmt) * 0.08 * 100) / 100, [subtotal, discountAmt]);
@@ -135,6 +172,18 @@ export default function Book() {
       router.push("/renter-profile");
       return;
     }
+    if (pickupDate <= new Date()) {
+      Alert.alert("Pickup time", "Pickup time must be in the future.");
+      return;
+    }
+    if (unavailable.length) {
+      Alert.alert("Dates unavailable", "This car is already booked or blocked for some of those dates.");
+      return;
+    }
+    if (!acceptTerms) {
+      Alert.alert("Rental terms", "Please accept the rental agreement and cancellation policy.");
+      return;
+    }
     if ((user?.wallet_balance ?? 0) < total) {
       Alert.alert(
         "Insufficient balance",
@@ -156,6 +205,7 @@ export default function Book() {
         drop_datetime: dropDate.toISOString(),
         coupon_code: discount?.code ?? undefined,
         payment_method: "wallet",
+        accept_rental_terms: acceptTerms,
       });
       await refresh();
       router.replace(`/booking-success?id=${res.booking_id}`);
@@ -296,6 +346,16 @@ export default function Book() {
           onConfirm={onPickDate}
         />
 
+        {unavailable.length > 0 ? (
+          <View style={styles.unavailableCard} testID="dates-unavailable">
+            <Ionicons name="calendar-clear-outline" size={18} color={colors.error} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gateTitle}>These dates aren&apos;t available</Text>
+              <Text style={styles.gateSub}>Already booked or blocked: {unavailable.join(", ")}</Text>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={styles.label}>PROMO CODE</Text>
           <View style={[styles.input, { paddingRight: 4 }]}>
@@ -367,6 +427,24 @@ export default function Book() {
             </View>
           </View>
         )}
+
+        {profileComplete !== false ? (
+          <View style={styles.termsCard}>
+            <Text style={styles.summaryTitle}>RENTAL TERMS</Text>
+            <Text style={styles.termsLine}>• Cancel a pending request at any time at no cost.</Text>
+            <Text style={styles.termsLine}>
+              • Once the host accepts, cancelling refunds 80% of the total (${(total * 0.8).toFixed(2)}).
+            </Text>
+            <Text style={styles.termsLine}>
+              • Bring the licence on your profile to pickup. The car must be returned by the drop time shown above.
+            </Text>
+            <View style={{ marginTop: spacing.md }}>
+              <AgreementCheckbox testID="accept-rental-terms" checked={acceptTerms} onChange={setAcceptTerms}>
+                I have read and agree to the rental agreement and cancellation policy.
+              </AgreementCheckbox>
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom + spacing.sm, spacing.xl) }]}>
@@ -374,7 +452,11 @@ export default function Book() {
           testID="confirm-booking"
           onPress={confirmBooking}
           disabled={submitting}
-          style={({ pressed }) => [styles.confirmBtn, (pressed || submitting) && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+          style={({ pressed }) => [
+            styles.confirmBtn,
+            profileComplete !== false && (!acceptTerms || unavailable.length > 0) && styles.confirmBtnMuted,
+            (pressed || submitting) && { opacity: 0.85, transform: [{ scale: 0.98 }] },
+          ]}
         >
           {submitting ? (
             <ActivityIndicator color="#000" />
@@ -576,6 +658,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
+  confirmBtnMuted: { opacity: 0.55 },
   confirmText: { color: "#000", fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 1 },
   bottomNote: {
     color: colors.textMuted,
@@ -608,6 +691,28 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
   },
+  unavailableCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    backgroundColor: "rgba(255,107,107,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,107,107,0.35)",
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  termsCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+  },
+  termsLine: { color: colors.textSecondary, fontFamily: fonts.body, fontSize: 12, lineHeight: 18, marginBottom: 4 },
   gateTitle: { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.bodyMedium },
   gateSub: { color: colors.textSecondary, fontSize: 11, fontFamily: fonts.body, marginTop: 2, lineHeight: 16 },
 });

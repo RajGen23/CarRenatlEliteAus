@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 
+import { AgreementCheckbox } from "@/src/components/AgreementCheckbox";
 import { Screen } from "@/src/components/Screen";
 import { useAuth } from "@/src/AuthContext";
 import { useAppConfig } from "@/src/appConfig";
@@ -27,6 +28,7 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,10 +36,11 @@ export default function Register() {
     if (username.trim().length < 3) return "Username must be at least 3 characters.";
     if (!/^[a-zA-Z0-9_\.]+$/.test(username.trim()))
       return "Username may only contain letters, numbers, underscore or dot.";
+    if (!email.trim()) return "Email is required.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return "Please enter a valid email address.";
     if (password.length < 6) return "Password must be at least 6 characters.";
     if (password !== confirm) return "Passwords do not match.";
-    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
-      return "Please enter a valid email address.";
+    if (!acceptTerms) return "Please accept the Terms of Service to continue.";
     return null;
   };
 
@@ -54,7 +57,8 @@ export default function Register() {
         username,
         password,
         name: name || username,
-        email: email || undefined,
+        email,
+        acceptTerms,
       });
       router.replace("/(tabs)/home");
     } catch (e: any) {
@@ -104,7 +108,7 @@ export default function Register() {
           />
           <Field
             testID="reg-email"
-            label="EMAIL (OPTIONAL)"
+            label="EMAIL *"
             placeholder="you@email.com"
             value={email}
             onChangeText={setEmail}
@@ -139,6 +143,13 @@ export default function Register() {
             secureTextEntry={!showPw}
             icon="lock-closed-outline"
           />
+
+          <View style={styles.terms}>
+            <AgreementCheckbox testID="reg-accept-terms" checked={acceptTerms} onChange={setAcceptTerms}>
+              I agree to the EliteReserve Terms of Service and Privacy Policy, and confirm that I am at least
+              18 years old.
+            </AgreementCheckbox>
+          </View>
 
           {error ? (
             <View style={styles.errorBox}>
@@ -255,6 +266,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   input: { flex: 1, color: colors.textPrimary, fontFamily: fonts.body, fontSize: 15 },
+  terms: { marginTop: spacing.xs, marginBottom: spacing.lg },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",

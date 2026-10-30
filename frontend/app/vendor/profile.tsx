@@ -125,7 +125,7 @@ export default function VendorProfile() {
           <Field label="ACCOUNT NUMBER" value={form.bank_account_no} onChangeText={(v) => set("bank_account_no", v)} placeholder="0000 0000" keyboardType="number-pad" testID="vp-acct" />
           <View style={styles.note}>
             <Ionicons name="lock-closed" size={12} color={colors.primary} />
-            <Text style={styles.noteText}>Bank details are encrypted at rest. Demo mode does not store real funds.</Text>
+            <Text style={styles.noteText}>Bank details are only used to pay out your earnings and are visible to you and the EliteReserve team.</Text>
           </View>
         </Section>
 

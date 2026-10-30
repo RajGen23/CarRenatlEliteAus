@@ -11,6 +11,9 @@ import type { Booking } from "@/src/types";
 type VBooking = Booking & {
   customer_name: string;
   customer_email: string;
+  customer_phone: string;
+  customer_license_no: string;
+  customer_license_expiry: string;
   customer_picture?: string | null;
   commission: number;
   net: number;
@@ -104,7 +107,18 @@ export default function VendorBookings() {
                 )}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.custName}>{b.customer_name}</Text>
-                  <Text style={styles.custEmail} numberOfLines={1}>{b.customer_email}</Text>
+                  {b.customer_email ? (
+                    <Text style={styles.custEmail} numberOfLines={1}>{b.customer_email}</Text>
+                  ) : null}
+                  {b.customer_phone ? (
+                    <Text style={styles.custEmail} numberOfLines={1}>{b.customer_phone}</Text>
+                  ) : null}
+                  {b.customer_license_no ? (
+                    <Text style={styles.custEmail} numberOfLines={1}>
+                      Licence {b.customer_license_no}
+                      {b.customer_license_expiry ? ` · exp ${b.customer_license_expiry}` : ""}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
 

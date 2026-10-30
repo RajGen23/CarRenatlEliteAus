@@ -26,6 +26,7 @@ export default function CarDetail() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [wishlisted, setWishlisted] = useState(false);
+  const [canReview, setCanReview] = useState(false);
   const [loading, setLoading] = useState(true);
   const [galleryWidth, setGalleryWidth] = useState(0);
   const galleryRef = useRef<ScrollView>(null);
@@ -45,6 +46,10 @@ export default function CarDetail() {
     } finally {
       setLoading(false);
     }
+    api
+      .get<{ eligible: boolean }>(`/reviews/eligibility?car_id=${encodeURIComponent(String(id))}`)
+      .then((r) => setCanReview(r.eligible))
+      .catch(() => setCanReview(false));
   }, [id]);
 
   useFocusEffect(
@@ -240,15 +245,17 @@ export default function CarDetail() {
         <View style={styles.section}>
           <View style={styles.reviewHeader}>
             <Text style={styles.sectionLabel}>REVIEWS · {reviews.length}</Text>
-            <Pressable
-              testID="add-review"
-              onPress={() => router.push(`/review/${car.car_id}`)}
-            >
-              <Text style={styles.addReviewLink}>+ Add</Text>
-            </Pressable>
+            {canReview ? (
+              <Pressable
+                testID="add-review"
+                onPress={() => router.push(`/review/${car.car_id}`)}
+              >
+                <Text style={styles.addReviewLink}>+ Add</Text>
+              </Pressable>
+            ) : null}
           </View>
           {reviews.length === 0 ? (
-            <Text style={styles.noReviews}>No reviews yet. Be the first.</Text>
+            <Text style={styles.noReviews}>No reviews yet.</Text>
           ) : (
             reviews.slice(0, 3).map((r) => (
               <View key={r.review_id} style={styles.reviewCard}>

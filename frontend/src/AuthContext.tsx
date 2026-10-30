@@ -6,11 +6,19 @@ import type { User } from "@/src/types";
 
 type AuthResponse = { session_token: string; user: User };
 
+type SignUpArgs = {
+  username: string;
+  password: string;
+  email: string;
+  acceptTerms: boolean;
+  name?: string;
+};
+
 type AuthState = {
   user: User | null;
   loading: boolean;
   signIn: (identifier: string, password: string) => Promise<void>;
-  signUp: (args: { username: string; password: string; name?: string; email?: string }) => Promise<void>;
+  signUp: (args: SignUpArgs) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -70,12 +78,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = useCallback(
-    async (args: { username: string; password: string; name?: string; email?: string }) => {
+    async (args: SignUpArgs) => {
       const res = await api.post<AuthResponse>("/auth/register", {
         username: args.username.trim(),
         password: args.password,
         name: args.name?.trim() || undefined,
-        email: args.email?.trim() || undefined,
+        email: args.email.trim(),
+        accept_terms: args.acceptTerms,
       });
       await storage.secureSet(SESSION_KEY, res.session_token);
       setUser(res.user);

@@ -90,7 +90,7 @@ export default function VendorOnboarding() {
               <Ionicons name="cloud-upload-outline" size={22} color={colors.primary} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.uploadTitle}>Drivers licence photo</Text>
-                <Text style={styles.uploadSub}>Optional · used for live verification</Text>
+                <Text style={styles.uploadSub}>Optional · reviewed by our team</Text>
               </View>
               <View style={styles.uploadBadge}><Text style={styles.uploadBadgeText}>SKIP</Text></View>
             </View>
@@ -113,7 +113,7 @@ export default function VendorOnboarding() {
             <Field label="ACCOUNT NUMBER *" value={form.bank_account_no} onChangeText={(v) => set("bank_account_no", v)} placeholder="0000 0000" keyboardType="number-pad" testID="f-acct" />
             <View style={styles.note}>
               <Ionicons name="lock-closed" size={12} color={colors.primary} />
-              <Text style={styles.noteText}>Bank details are encrypted at rest. Demo mode does not store real funds.</Text>
+              <Text style={styles.noteText}>Bank details are only used to pay out your earnings and are visible to you and the EliteReserve team.</Text>
             </View>
           </View>
         )}

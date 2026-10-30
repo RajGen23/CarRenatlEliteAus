@@ -157,15 +157,13 @@ export default function VendorRequests() {
               </View>
 
               <View style={styles.detailBlock}>
-                <Detail icon="call-outline" label="PHONE" value={b.renter.phone || "—"} />
-                <Detail icon="mail-outline" label="EMAIL" value={b.renter.email || "—"} />
-                <Detail icon="home-outline" label="ADDRESS" value={b.renter.address || "—"} />
-                <Detail icon="calendar-outline" label="DATE OF BIRTH" value={b.renter.dob || "—"} />
-                <Detail
-                  icon="card-outline"
-                  label="LICENCE"
-                  value={b.renter.license_no ? `${b.renter.license_no} · exp ${b.renter.license_expiry}` : "—"}
-                />
+                {b.renter.city ? <Detail icon="location-outline" label="BASED IN" value={b.renter.city} /> : null}
+                <View style={styles.privacyNote}>
+                  <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
+                  <Text style={styles.privacyText}>
+                    Contact and licence details are shared once you accept this request.
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.carRow}>
@@ -378,6 +376,8 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
     gap: spacing.sm,
   },
+  privacyNote: { flexDirection: "row", alignItems: "center", gap: 6, paddingTop: 2 },
+  privacyText: { flex: 1, color: colors.textMuted, fontFamily: fonts.body, fontSize: 11, lineHeight: 16 },
   detailRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   detailLabel: { color: colors.textMuted, fontSize: 9, letterSpacing: 1.5, fontFamily: fonts.bodyBold, width: 96 },
   detailValue: { color: colors.textPrimary, fontSize: 12, fontFamily: fonts.body, flex: 1, lineHeight: 17 },

@@ -2,16 +2,50 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 
 import { Screen } from "@/src/components/Screen";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
+import { notify } from "@/src/utils/dialog";
+import type { VehicleDocument } from "@/src/types";
 
 const CATEGORIES = ["Sports", "Luxury", "SUV", "Sedan"] as const;
 const FUELS = ["Petrol", "Electric", "Hybrid", "Diesel"];
 const TRANSMISSIONS = ["Automatic", "Manual"];
 
 const DEFAULT_IMG = "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200&q=80";
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
+type DocKind = "insurance" | "registration";
+type PickedDocument = { content_type: string; data_b64: string; file_name?: string };
+
+const DOC_LABELS: Record<DocKind, string> = {
+  insurance: "Insurance certificate",
+  registration: "Registration certificate",
+};
+
+async function pickDocument(): Promise<PickedDocument | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    notify("Photo access needed", "Allow access to your photos to upload a copy of the certificate.");
+    return null;
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7, base64: true });
+  const asset = result.canceled ? null : result.assets?.[0];
+  if (!asset?.base64) return null;
+  if ((asset.base64.length * 3) / 4 > MAX_DOCUMENT_BYTES) {
+    notify("File too large", "Documents must be 5 MB or smaller.");
+    return null;
+  }
+  return {
+    content_type: asset.mimeType || "image/jpeg",
+    data_b64: asset.base64,
+    file_name: asset.fileName ?? undefined,
+  };
+}
+
+const isIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime());
 
 export default function VendorCarForm() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -35,12 +69,15 @@ export default function VendorCarForm() {
     acceleration: "",
     registration_no: "",
     year: "",
+    insurance_expiry: "",
     available: true,
   });
+  const [picked, setPicked] = useState<Partial<Record<DocKind, PickedDocument>>>({});
+  const [onFile, setOnFile] = useState<VehicleDocument[]>([]);
 
   useEffect(() => {
     if (!editing) return;
-    api.get<any>(`/cars/${id}`).then((c) => {
+    api.get<any>(`/vendor/cars/${id}`).then((c) => {
       setForm({
         brand: c.brand,
         model: c.model,
@@ -59,16 +96,31 @@ export default function VendorCarForm() {
         acceleration: c.acceleration ?? "",
         registration_no: c.registration_no ?? "",
         year: String(c.year ?? ""),
+        insurance_expiry: (c.insurance_expiry ?? "").slice(0, 10),
         available: c.available,
       });
+      setOnFile(c.documents ?? []);
     }).catch(() => {});
   }, [editing, id]);
 
   const set = (k: keyof typeof form, v: any) => setForm((p) => ({ ...p, [k]: v }));
 
+  const hasDocument = (kind: DocKind) => !!picked[kind] || onFile.some((d) => d.kind === kind);
+
+  const choose = async (kind: DocKind) => {
+    const doc = await pickDocument();
+    if (doc) setPicked((p) => ({ ...p, [kind]: doc }));
+  };
+
   const submit = async () => {
     if (!form.brand || !form.model || !form.price_per_day) {
       return Alert.alert("Required", "Brand, model and daily price are required.");
+    }
+    if (!isIsoDate(form.insurance_expiry)) {
+      return Alert.alert("Insurance expiry", "Enter the insurance expiry date as YYYY-MM-DD.");
+    }
+    if (!hasDocument("insurance") || !hasDocument("registration")) {
+      return Alert.alert("Documents required", "Upload both the insurance and registration certificates.");
     }
     setSubmitting(true);
     try {
@@ -92,12 +144,18 @@ export default function VendorCarForm() {
         acceleration: form.acceleration,
         registration_no: form.registration_no,
         year: form.year ? parseInt(form.year, 10) : null,
+        insurance_expiry: form.insurance_expiry,
+        insurance_document: picked.insurance,
+        registration_document: picked.registration,
         available: form.available,
       };
       if (editing) {
         await api.patch(`/vendor/cars/${id}`, payload);
       } else {
         await api.post("/vendor/cars", payload);
+      }
+      if (!editing || picked.insurance || picked.registration) {
+        notify("Sent for review", "Our team checks the documents before the car is shown to renters.");
       }
       router.replace("/(vendor)/fleet");
     } catch (e: any) {
@@ -175,14 +233,51 @@ export default function VendorCarForm() {
           <View style={styles.imagePreview}>
             {form.image ? <Text style={styles.previewHint}>Preview</Text> : null}
           </View>
-          <View style={styles.uploadCard}>
-            <Ionicons name="document-attach-outline" size={20} color={colors.primary} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.uploadTitle}>Insurance & registration docs</Text>
-              <Text style={styles.uploadSub}>Optional · 256-bit encrypted</Text>
-            </View>
-            <View style={styles.uploadBadge}><Text style={styles.uploadBadgeText}>SKIP</Text></View>
-          </View>
+        </Section>
+
+        <Section title="INSURANCE & REGISTRATION">
+          <Field
+            label="INSURANCE EXPIRY *"
+            value={form.insurance_expiry}
+            onChangeText={(v) => set("insurance_expiry", v)}
+            placeholder="YYYY-MM-DD"
+            keyboardType="numbers-and-punctuation"
+            autoCapitalize="none"
+            testID="f-insurance-expiry"
+          />
+          {(["insurance", "registration"] as DocKind[]).map((kind) => {
+            const fresh = picked[kind];
+            const existing = onFile.find((d) => d.kind === kind);
+            const status = fresh ? "Ready to upload" : existing ? "On file" : "Required";
+            return (
+              <Pressable
+                key={kind}
+                testID={`f-doc-${kind}`}
+                accessibilityLabel={`${DOC_LABELS[kind]}: ${status}`}
+                onPress={() => choose(kind)}
+                style={[styles.uploadCard, (fresh || existing) && styles.uploadCardDone]}
+              >
+                <Ionicons
+                  name={fresh || existing ? "checkmark-circle" : "document-attach-outline"}
+                  size={20}
+                  color={fresh || existing ? colors.success : colors.primary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.uploadTitle}>{DOC_LABELS[kind]} *</Text>
+                  <Text style={styles.uploadSub} numberOfLines={1}>
+                    {fresh?.file_name || existing?.file_name || "Photo or scan, up to 5 MB"}
+                  </Text>
+                </View>
+                <View style={styles.uploadBadge}>
+                  <Text style={styles.uploadBadgeText}>{fresh || existing ? "REPLACE" : "UPLOAD"}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+          <Text style={styles.docNote}>
+            Documents are only visible to you and the EliteReserve team. Your car is shown to renters after
+            they&apos;ve been checked, and is hidden automatically if the insurance expires.
+          </Text>
         </Section>
 
         <Section title="DESCRIPTION">
@@ -274,10 +369,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
     padding: spacing.md, borderRadius: radius.lg, marginTop: spacing.sm,
   },
+  uploadCardDone: { borderColor: "rgba(124,227,166,0.35)" },
   uploadTitle: { color: colors.textPrimary, fontFamily: fonts.bodyMedium, fontSize: 13 },
   uploadSub: { color: colors.textMuted, fontSize: 11, fontFamily: fonts.body, marginTop: 2 },
   uploadBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.full, borderWidth: 1, borderColor: colors.border },
   uploadBadgeText: { color: colors.textMuted, fontSize: 9, letterSpacing: 1.5, fontFamily: fonts.bodyBold },
+  docNote: { color: colors.textMuted, fontSize: 11, fontFamily: fonts.body, lineHeight: 16, marginTop: spacing.sm },
   cta: { backgroundColor: colors.primary, paddingVertical: 18, borderRadius: radius.full, marginTop: spacing.lg, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 8 },
   ctaText: { color: "#000", fontFamily: fonts.bodyBold, fontSize: 14, letterSpacing: 1 },
 });

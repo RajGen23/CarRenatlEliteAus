@@ -44,7 +44,7 @@ export default function VendorCalendar() {
 
   useEffect(() => {
     if (!id) return;
-    api.get<CarLite>(`/cars/${id}`).then((c) => {
+    api.get<CarLite>(`/vendor/cars/${id}`).then((c) => {
       setCar(c);
       setLoading(false);
     }).catch((e) => {
@@ -71,7 +71,7 @@ export default function VendorCalendar() {
     setSaving(true);
     try {
       await api.post(`/vendor/cars/${id}/block`, { dates: Array.from(selected) });
-      const c = await api.get<CarLite>(`/cars/${id}`);
+      const c = await api.get<CarLite>(`/vendor/cars/${id}`);
       setCar(c);
       setSelected(new Set());
     } catch (e: any) {
@@ -84,7 +84,7 @@ export default function VendorCalendar() {
     setSaving(true);
     try {
       await api.post(`/vendor/cars/${id}/unblock`, { dates: Array.from(selected) });
-      const c = await api.get<CarLite>(`/cars/${id}`);
+      const c = await api.get<CarLite>(`/vendor/cars/${id}`);
       setCar(c);
       setSelected(new Set());
     } catch (e: any) {

@@ -12,6 +12,8 @@ import { colors, fonts, radius, spacing } from "@/src/theme";
 const LOGO_SOURCE = require("../../assets/images/logo.png");
 
 type Dash = {
+  kyc_status: "pending" | "approved" | "rejected";
+  host_approved: boolean;
   total_vehicles: number;
   upcoming_bookings: number;
   active_rentals: number;
@@ -104,6 +106,26 @@ export default function VendorDashboard() {
             {user?.name?.split(" ")[0] ?? "Host"}<Text style={styles.greetDot}>.</Text>
           </Text>
         </View>
+
+        {data && !data.host_approved ? (
+          <View testID="host-review-banner" style={[styles.reviewBanner, data.kyc_status === "rejected" && styles.reviewBannerRejected]}>
+            <Ionicons
+              name={data.kyc_status === "rejected" ? "close-circle-outline" : "time-outline"}
+              size={18}
+              color={data.kyc_status === "rejected" ? colors.error : colors.warning}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reviewTitle}>
+                {data.kyc_status === "rejected" ? "Host application not approved" : "Your host account is in review"}
+              </Text>
+              <Text style={styles.reviewSub}>
+                {data.kyc_status === "rejected"
+                  ? "Your cars stay hidden from renters. Contact support if you think this is a mistake."
+                  : "You can add cars now. They're shown to renters, and you can accept bookings, once we've approved your account."}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         <View style={styles.kpiGrid}>
           <KpiCard label="VEHICLES" value={`${data?.total_vehicles ?? 0}`} icon="car-sport-outline" />
@@ -281,6 +303,21 @@ const styles = StyleSheet.create({
   greetMuted: { color: colors.textMuted, fontSize: 11, letterSpacing: 2, fontFamily: fonts.bodyMedium },
   greetName: { color: colors.textPrimary, fontSize: 28, fontFamily: fonts.display, letterSpacing: -0.5, marginTop: 2 },
   greetDot: { color: colors.primary },
+  reviewBanner: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "flex-start",
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: "rgba(240,183,60,0.35)",
+    backgroundColor: "rgba(240,183,60,0.08)",
+  },
+  reviewBannerRejected: { borderColor: "rgba(255,107,107,0.35)", backgroundColor: "rgba(255,107,107,0.08)" },
+  reviewTitle: { color: colors.textPrimary, fontSize: 14, fontFamily: fonts.bodyMedium },
+  reviewSub: { color: colors.textSecondary, fontSize: 12, fontFamily: fonts.body, marginTop: 2, lineHeight: 17 },
   kpiGrid: {
     flexDirection: "row",
     flexWrap: "wrap",

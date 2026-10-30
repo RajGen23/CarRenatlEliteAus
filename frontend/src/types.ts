@@ -19,6 +19,28 @@ export interface Car {
   horsepower: number;
   top_speed: number;
   acceleration: string;
+  vendor_id?: string | null;
+  blocked_dates?: string[];
+  insurance_expiry?: string | null;
+  approval_status?: "pending" | "approved" | "rejected";
+  listing_status?: ListingStatus;
+}
+
+export type ListingStatus = "live" | "pending" | "rejected" | "host_pending" | "insurance_expired" | "paused";
+
+export interface VehicleDocument {
+  kind: "insurance" | "registration";
+  content_type: string;
+  file_name?: string | null;
+  size: number;
+  review_status: string;
+  uploaded_at: string;
+}
+
+export interface CarAvailability {
+  car_id: string;
+  booked: { start: string; end: string }[];
+  blocked_dates: string[];
 }
 
 export interface Booking {
@@ -63,12 +85,7 @@ export interface RenterCard {
   user_id: string;
   name: string;
   picture?: string | null;
-  email: string;
-  phone: string;
-  dob: string;
-  address: string;
-  license_no: string;
-  license_expiry: string;
+  city?: string;
   license_verified: boolean;
   id_verified: boolean;
   member_since: string;

@@ -7,7 +7,16 @@ import { Screen } from "@/src/components/Screen";
 import { ConfirmModal } from "@/src/components/ConfirmModal";
 import { api } from "@/src/api";
 import { colors, fonts, radius, spacing } from "@/src/theme";
-import type { Car } from "@/src/types";
+import type { Car, ListingStatus } from "@/src/types";
+
+const LISTING_LABELS: Record<ListingStatus, { label: string; tone: "ok" | "warn" | "danger" }> = {
+  live: { label: "Live", tone: "ok" },
+  pending: { label: "In review", tone: "warn" },
+  host_pending: { label: "Hidden until your account is approved", tone: "warn" },
+  rejected: { label: "Not approved", tone: "danger" },
+  insurance_expired: { label: "Insurance expired", tone: "danger" },
+  paused: { label: "Paused", tone: "warn" },
+};
 
 export default function VendorFleet() {
   const [cars, setCars] = useState<Car[]>([]);
@@ -68,7 +77,7 @@ export default function VendorFleet() {
           <View style={styles.empty}>
             <Ionicons name="car-sport-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No vehicles listed yet</Text>
-            <Text style={styles.emptySub}>Add your first luxury car and start earning within 24 hours.</Text>
+            <Text style={styles.emptySub}>Add your first luxury car. It goes live once its documents have been checked.</Text>
             <Pressable
               testID="empty-add"
               onPress={() => router.push("/vendor/car-form")}
@@ -85,9 +94,21 @@ export default function VendorFleet() {
               <View style={styles.body}>
                 <View style={styles.row}>
                   <Text style={styles.brand}>{c.brand.toUpperCase()}</Text>
-                  <View style={[styles.statusDot, { backgroundColor: c.available ? colors.success : colors.error }]} />
+                  <View style={[styles.statusDot, { backgroundColor: c.listing_status === "live" ? colors.success : colors.error }]} />
                 </View>
                 <Text style={styles.model}>{c.model}</Text>
+                {c.listing_status ? (
+                  <Text
+                    testID={`listing-status-${c.car_id}`}
+                    style={[
+                      styles.listing,
+                      LISTING_LABELS[c.listing_status].tone === "ok" && { color: colors.success },
+                      LISTING_LABELS[c.listing_status].tone === "danger" && { color: colors.error },
+                    ]}
+                  >
+                    {LISTING_LABELS[c.listing_status].label}
+                  </Text>
+                ) : null}
                 <View style={styles.meta}>
                   <Text style={styles.metaItem}>{c.category}</Text>
                   <Text style={styles.metaDot}>·</Text>
@@ -190,6 +211,7 @@ const styles = StyleSheet.create({
   brand: { color: colors.textMuted, fontSize: 10, letterSpacing: 2, fontFamily: fonts.bodyBold },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   model: { color: colors.textPrimary, fontSize: 16, fontFamily: fonts.displayMedium, letterSpacing: -0.3 },
+  listing: { color: colors.warning, fontSize: 11, fontFamily: fonts.bodyMedium, marginTop: 4 },
   meta: { flexDirection: "row", gap: 6, marginTop: 2, alignItems: "center" },
   metaItem: { color: colors.textSecondary, fontSize: 11, fontFamily: fonts.body },
   metaDot: { color: colors.textMuted, fontSize: 11 },

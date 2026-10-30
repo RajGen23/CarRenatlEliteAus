@@ -75,7 +75,7 @@ export default function VendorEarnings() {
 
         <View style={styles.withdraw}>
           <Text style={styles.sectionTitle}>Request a payout</Text>
-          <Text style={styles.sectionSub}>Funds arrive 1–2 business days · transferred to your saved bank.</Text>
+          <Text style={styles.sectionSub}>Only earnings from completed trips can be paid out. Funds arrive in 1–2 business days.</Text>
           <View style={styles.withdrawRow}>
             <View style={styles.amountWrap}>
               <Text style={styles.dollar}>$</Text>
