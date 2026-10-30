@@ -1,14 +1,18 @@
 """Public catalogue: cars, reviews and coupons."""
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pymongo.errors import DuplicateKeyError
 
 from database import db
 from models import CouponValidate, ReviewCreate
 from security import get_current_user
+from services.availability import booked_ranges, market_today
 from services.bookings import find_coupon
+from services.listings import find_listable_car, listable_filter
 
 router = APIRouter(tags=["catalog"])
 
@@ -27,14 +31,15 @@ async def list_cars(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
 ):
-    query: dict = {}
+    query = await listable_filter()
     if category and category != "All":
         query["category"] = category
     if search:
-        query["$or"] = [
-            {"brand": {"$regex": search, "$options": "i"}},
-            {"model": {"$regex": search, "$options": "i"}},
-        ]
+        pattern = re.escape(search.strip())
+        query["$and"].append({"$or": [
+            {"brand": {"$regex": pattern, "$options": "i"}},
+            {"model": {"$regex": pattern, "$options": "i"}},
+        ]})
     if min_price is not None or max_price is not None:
         price: dict = {}
         if min_price is not None:
@@ -52,7 +57,7 @@ async def list_cars(
 @router.get("/cars/featured")
 async def featured_cars():
     return await (
-        db.cars.find({"available": True}, {"_id": 0})
+        db.cars.find(await listable_filter(), {"_id": 0})
         .sort([("featured", -1), ("rating", -1)])
         .limit(5)
         .to_list(5)
@@ -61,10 +66,24 @@ async def featured_cars():
 
 @router.get("/cars/{car_id}")
 async def get_car(car_id: str):
-    car = await db.cars.find_one({"car_id": car_id}, {"_id": 0})
+    car = await find_listable_car(car_id)
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
     return car
+
+
+@router.get("/cars/{car_id}/availability")
+async def car_availability(car_id: str):
+    """Dates renters can't book: confirmed trips and days the host has blocked."""
+    car = await find_listable_car(car_id)
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+    today = market_today()
+    return {
+        "car_id": car_id,
+        "booked": await booked_ranges(car_id),
+        "blocked_dates": sorted(d for d in car.get("blocked_dates") or [] if d >= today),
+    }
 
 
 @router.get("/cars/{car_id}/reviews")
@@ -72,21 +91,52 @@ async def car_reviews(car_id: str):
     return await db.reviews.find({"car_id": car_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 
+async def _reviewable_trip(user_id: str, car_id: str, booking_id: Optional[str] = None) -> Optional[dict]:
+    """A completed trip of this car by this renter that hasn't been reviewed yet."""
+    reviewed = [r["booking_id"] async for r in db.reviews.find(
+        {"user_id": user_id, "car_id": car_id, "booking_id": {"$type": "string"}}, {"_id": 0, "booking_id": 1}
+    )]
+    booking_filter: dict = {"$nin": reviewed}
+    if booking_id:
+        booking_filter["$eq"] = booking_id
+    query = {"user_id": user_id, "car_id": car_id, "status": "completed", "booking_id": booking_filter}
+    return await db.bookings.find_one(query, {"_id": 0}, sort=[("drop_at", 1)])
+
+
+@router.get("/reviews/eligibility")
+async def review_eligibility(car_id: str, user: dict = Depends(get_current_user)):
+    trip = await _reviewable_trip(user["user_id"], car_id)
+    return {"eligible": trip is not None, "booking_id": trip["booking_id"] if trip else None}
+
+
 @router.post("/reviews")
 async def create_review(payload: ReviewCreate, user: dict = Depends(get_current_user)):
     if not 1 <= payload.rating <= 5:
         raise HTTPException(status_code=400, detail="Rating must be 1-5")
+    comment = (payload.comment or "").strip()
+    if not comment:
+        raise HTTPException(status_code=400, detail="Please write a comment.")
+    trip = await _reviewable_trip(user["user_id"], payload.car_id, payload.booking_id)
+    if not trip:
+        raise HTTPException(
+            status_code=403,
+            detail="You can review a car once per completed trip, after you've driven it.",
+        )
     review = {
         "review_id": f"rv_{uuid.uuid4().hex[:12]}",
         "user_id": user["user_id"],
         "user_name": user["name"],
         "user_picture": user.get("picture"),
         "car_id": payload.car_id,
+        "booking_id": trip["booking_id"],
         "rating": payload.rating,
-        "comment": payload.comment,
+        "comment": comment[:2000],
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.reviews.insert_one({**review})
+    try:
+        await db.reviews.insert_one({**review})
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="You've already reviewed this trip.")
     return review
 
 

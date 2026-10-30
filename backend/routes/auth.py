@@ -15,6 +15,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION_MINUTES = 15
 USERNAME_RE = re.compile(r"^[a-zA-Z0-9_\.]+$")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 PASSWORD_MIN_LENGTH = 6
 
 
@@ -27,13 +28,20 @@ async def register(payload: UserRegister):
         raise HTTPException(status_code=400, detail="Username may only contain letters, numbers, underscore or dot.")
     if len(payload.password or "") < PASSWORD_MIN_LENGTH:
         raise HTTPException(status_code=400, detail=f"Password must be at least {PASSWORD_MIN_LENGTH} characters.")
+    email = (payload.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+    if len(email) > 254 or not EMAIL_RE.match(email):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+    if not payload.accept_terms:
+        raise HTTPException(status_code=400, detail="You need to accept the Terms of Service to create an account.")
 
     if await db.users.find_one({"username": uname}):
         raise HTTPException(status_code=409, detail="Username is already taken.")
-    email = (payload.email or "").strip().lower() or None
-    if email and await db.users.find_one({"email": email}):
+    if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Email is already registered.")
 
+    now = datetime.now(timezone.utc).isoformat()
     user = {
         "user_id": f"user_{uuid.uuid4().hex[:12]}",
         "username": uname,
@@ -47,7 +55,9 @@ async def register(payload: UserRegister):
         "password_hash": hash_password(payload.password),
         "failed_login_attempts": 0,
         "locked_until": None,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "terms_accepted_at": now,
+        "terms_version": config.TERMS_VERSION,
+        "created_at": now,
     }
     await db.users.insert_one(user)
     token = await issue_session_token(user["user_id"])

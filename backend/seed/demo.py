@@ -13,6 +13,7 @@ import config
 from database import db
 from security import hash_password, verify_password
 from seed.catalog import DEMO_FLEET, DEMO_REVIEWS
+from services.availability import utc_stamp
 from services.bookings import request_expiry
 
 log = logging.getLogger(__name__)
@@ -269,6 +270,8 @@ async def _seed_pending_request(vendor_id: str) -> None:
         "drop_location": "Melbourne Airport · Tullamarine",
         "pickup_datetime": (now + timedelta(days=4)).isoformat(),
         "drop_datetime": (now + timedelta(days=6)).isoformat(),
+        "pickup_at": utc_stamp(now + timedelta(days=4)),
+        "drop_at": utc_stamp(now + timedelta(days=6)),
         "days": 2,
         "subtotal": 1960.0,
         "discount": 0.0,
@@ -368,6 +371,8 @@ async def _seed_customers_and_bookings() -> None:
             "drop_location": rng.choice(DROP_LOCATIONS),
             "pickup_datetime": pickup.isoformat(),
             "drop_datetime": (pickup + timedelta(days=days)).isoformat(),
+            "pickup_at": utc_stamp(pickup),
+            "drop_at": utc_stamp(pickup + timedelta(days=days)),
             "days": days,
             "subtotal": subtotal,
             "discount": discount,

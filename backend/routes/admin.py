@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 import config
 from database import db
 from models import CouponIn, RefundBody
+from services import documents
+from services.availability import market_today, parse_calendar_date
 from services.reporting import CONFIRMED, monthly_totals, NON_CUSTOMER_ROLES
 from security import get_admin_user
 
@@ -133,14 +135,20 @@ async def toggle_suspend(user_id: str):
 async def list_cars(status: Optional[str] = None):
     query = {"approval_status": status} if status and status != "all" else {}
     cars = await db.cars.find(query, {"_id": 0}).sort("created_at", -1).limit(300).to_list(300)
-    now = datetime.now(timezone.utc)
+    uploaded: dict = {}
+    async for d in db.vehicle_documents.find(
+        {"car_id": {"$in": [c["car_id"] for c in cars]}}, {"_id": 0, "car_id": 1, "kind": 1}
+    ):
+        uploaded.setdefault(d["car_id"], []).append(d["kind"])
+    today = parse_calendar_date(market_today())
     for c in cars:
+        c["documents"] = sorted(uploaded.get(c["car_id"], []))
         c.setdefault("approval_status", "approved")
         c["insurance_alert"] = False
         expiry = c.get("insurance_expiry")
         if expiry:
             try:
-                days_left = (datetime.fromisoformat(expiry.replace("Z", "+00:00")) - now).days
+                days_left = (parse_calendar_date(expiry[:10]) - today).days
             except ValueError:
                 continue
             c["insurance_days_left"] = days_left
@@ -152,11 +160,31 @@ async def _set_approval(car_id: str, status: str, available: bool) -> dict:
     res = await db.cars.update_one({"car_id": car_id}, {"$set": {"approval_status": status, "available": available}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Car not found")
+    await documents.mark_reviewed(car_id, status)
     return {"approval_status": status}
+
+
+@router.get("/cars/{car_id}/documents")
+async def car_documents(car_id: str):
+    return await documents.list_documents(car_id)
+
+
+@router.get("/cars/{car_id}/documents/{kind}")
+async def car_document(car_id: str, kind: str):
+    return await documents.get_document(car_id, kind)
 
 
 @router.post("/cars/{car_id}/approve")
 async def approve_car(car_id: str):
+    car = await db.cars.find_one({"car_id": car_id}, {"_id": 0, "vendor_id": 1, "insurance_expiry": 1})
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+    if car.get("vendor_id"):
+        if not await documents.has_all_documents(car_id):
+            raise HTTPException(status_code=400, detail="Insurance and registration documents are required before approval.")
+        expiry = car.get("insurance_expiry")
+        if not expiry or expiry[:10] < market_today():
+            raise HTTPException(status_code=400, detail="The vehicle's insurance has expired.")
     return await _set_approval(car_id, "approved", True)
 
 

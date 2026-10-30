@@ -10,8 +10,9 @@ CarCategory = Literal["SUV", "Sedan", "Sports", "Luxury"]
 class UserRegister(BaseModel):
     username: str
     password: str
+    email: str = ""
     name: Optional[str] = None
-    email: Optional[str] = None
+    accept_terms: bool = False
 
 
 class UserLogin(BaseModel):
@@ -28,6 +29,7 @@ class BookingCreate(BaseModel):
     drop_datetime: str
     coupon_code: Optional[str] = None
     payment_method: Literal["wallet"] = "wallet"
+    accept_rental_terms: bool = False
 
 
 class RenterProfileUpsert(BaseModel):
@@ -48,6 +50,7 @@ class ReviewCreate(BaseModel):
     car_id: str
     rating: int
     comment: str
+    booking_id: Optional[str] = None
 
 
 class WalletTopup(BaseModel):
@@ -81,8 +84,13 @@ class VendorProfilePatch(BaseModel):
     bank_account_no: Optional[str] = None
 
 
+class DocumentUpload(BaseModel):
+    content_type: str
+    data_b64: str
+    file_name: Optional[str] = None
+
+
 class VendorCarUpsert(BaseModel):
-    car_id: Optional[str] = None  # set when editing
     brand: str
     model: str
     category: CarCategory
@@ -102,8 +110,9 @@ class VendorCarUpsert(BaseModel):
     acceleration: str = ""
     registration_no: Optional[str] = None
     year: Optional[int] = None
-    insurance_doc_b64: Optional[str] = None
-    rc_doc_b64: Optional[str] = None
+    insurance_expiry: Optional[str] = None  # YYYY-MM-DD
+    insurance_document: Optional[DocumentUpload] = None
+    registration_document: Optional[DocumentUpload] = None
     available: bool = True
 
 

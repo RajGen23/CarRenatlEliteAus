@@ -8,15 +8,15 @@ import config
 from database import db
 from models import BookingCreate, RenterProfileUpsert, WalletTopup
 from security import get_current_user
+from services.availability import find_conflict, parse_booking_window
 from services.bookings import (
     RENTER_REQUIRED_FIELDS,
-    expire_stale_requests,
     find_coupon,
-    parse_iso,
     renter_profile_complete,
-    rental_days,
     request_expiry,
+    run_booking_housekeeping,
 )
+from services.listings import find_listable_car, listable_filter
 
 router = APIRouter(tags=["renter"])
 
@@ -43,13 +43,22 @@ async def save_renter_profile(payload: RenterProfileUpsert, user: dict = Depends
 async def create_booking(payload: BookingCreate, user: dict = Depends(get_current_user)):
     if not renter_profile_complete(user):
         raise HTTPException(status_code=400, detail="Complete your renter profile before requesting a booking")
-    car = await db.cars.find_one({"car_id": payload.car_id}, {"_id": 0})
-    if not car:
+    if not payload.accept_rental_terms:
+        raise HTTPException(
+            status_code=400,
+            detail="Please accept the rental agreement and cancellation policy to continue.",
+        )
+    window = parse_booking_window(payload.pickup_datetime, payload.drop_datetime)
+    if not await db.cars.find_one({"car_id": payload.car_id}, {"_id": 1}):
         raise HTTPException(status_code=404, detail="Car not found")
-    if not car.get("available", False):
+    car = await find_listable_car(payload.car_id)
+    if not car:
         raise HTTPException(status_code=400, detail="Car not available")
+    conflict = await find_conflict(car, window)
+    if conflict:
+        raise HTTPException(status_code=409, detail=f"{conflict} Please choose different dates.")
 
-    days = rental_days(payload.pickup_datetime, payload.drop_datetime)
+    days = window.days
     subtotal = round(car["price_per_day"] * days, 2)
 
     discount, coupon_code = 0.0, None
@@ -80,8 +89,10 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
         "car_image": car["image"],
         "pickup_location": payload.pickup_location,
         "drop_location": payload.drop_location,
-        "pickup_datetime": payload.pickup_datetime,
-        "drop_datetime": payload.drop_datetime,
+        "pickup_datetime": window.pickup.isoformat(),
+        "drop_datetime": window.drop.isoformat(),
+        "pickup_at": window.pickup_at,
+        "drop_at": window.drop_at,
         "days": days,
         "subtotal": subtotal,
         "discount": discount,
@@ -92,6 +103,8 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
         "payment_method": "wallet",
         "paid": False,
         "request_expires_at": request_expiry(now),
+        "rental_terms_accepted_at": now.isoformat(),
+        "terms_version": config.TERMS_VERSION,
         "created_at": now.isoformat(),
     }
     await db.bookings.insert_one({**booking})
@@ -100,15 +113,8 @@ async def create_booking(payload: BookingCreate, user: dict = Depends(get_curren
 
 @router.get("/bookings")
 async def my_bookings(user: dict = Depends(get_current_user)):
-    await expire_stale_requests()
-    bookings = await db.bookings.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
-
-    now = datetime.now(timezone.utc)
-    for b in bookings:
-        if b["status"] == "upcoming" and parse_iso(b["drop_datetime"]) < now:
-            await db.bookings.update_one({"booking_id": b["booking_id"]}, {"$set": {"status": "completed"}})
-            b["status"] = "completed"
-    return bookings
+    await run_booking_housekeeping()
+    return await db.bookings.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @router.post("/bookings/{booking_id}/cancel")
@@ -152,7 +158,7 @@ async def get_wishlist(user: dict = Depends(get_current_user)):
     car_ids = [i["car_id"] for i in items]
     if not car_ids:
         return []
-    return await db.cars.find({"car_id": {"$in": car_ids}}, {"_id": 0}).to_list(200)
+    return await db.cars.find({"car_id": {"$in": car_ids}, **await listable_filter()}, {"_id": 0}).to_list(200)
 
 
 @router.post("/wishlist/{car_id}")

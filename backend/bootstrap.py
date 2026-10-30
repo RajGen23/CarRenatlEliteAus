@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import config
 from database import db
 from security import hash_password
+from services.availability import backfill_booking_windows
+from services.documents import migrate_legacy_car_documents
 
 log = logging.getLogger(__name__)
 
@@ -13,15 +15,18 @@ async def run_startup_tasks() -> None:
     await _ensure_indexes()
     await _backfill_user_fields()
     await _ensure_admin_account()
+    await migrate_legacy_car_documents()
     if config.SEED_DEMO_DATA:
         from seed.demo import seed_demo_data
         await seed_demo_data()
+    await backfill_booking_windows()
 
 
 async def _ensure_indexes() -> None:
     await db.users.create_index("user_id", unique=True)
     await db.users.create_index("username", unique=True, sparse=True)
-    # Email is optional, so uniqueness only applies to accounts that have one.
+    # Accounts created before email became required may not have one, so uniqueness
+    # only applies to accounts that do.
     try:
         await db.users.create_index(
             "email", unique=True, name="email_unique_when_set",
@@ -34,7 +39,18 @@ async def _ensure_indexes() -> None:
     await db.cars.create_index("car_id", unique=True)
     await db.bookings.create_index("booking_id", unique=True)
     await db.bookings.create_index("user_id")
+    await db.bookings.create_index([("car_id", 1), ("status", 1), ("pickup_at", 1)])
+    await db.bookings.create_index([("status", 1), ("drop_at", 1)])
     await db.coupons.create_index("code", unique=True)
+    await db.vehicle_documents.create_index([("car_id", 1), ("kind", 1)], unique=True)
+    await db.locks.create_index("expires_at", expireAfterSeconds=0)
+    try:
+        await db.reviews.create_index(
+            "booking_id", unique=True, name="one_review_per_booking",
+            partialFilterExpression={"booking_id": {"$type": "string"}},
+        )
+    except Exception as exc:
+        log.warning("Could not create review index: %s", exc)
 
 
 async def _backfill_user_fields() -> None:

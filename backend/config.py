@@ -49,6 +49,13 @@ MARKETING_SPEND_MONTHLY = _float("MARKETING_SPEND_MONTHLY")
 # Vendor KYC is approved by an admin unless auto-approval is switched on.
 AUTO_APPROVE_VENDOR_KYC = _bool("AUTO_APPROVE_VENDOR_KYC", SEED_DEMO_DATA)
 
+# Calendar dates (blocked days, insurance expiry) are interpreted in this timezone.
+MARKET_TIMEZONE = os.environ.get("MARKET_TIMEZONE", "Australia/Melbourne")
+
+# Bump when the terms of service or rental agreement change, so acceptance can be
+# traced back to the wording the user actually saw.
+TERMS_VERSION = os.environ.get("TERMS_VERSION", "2026-10")
+
 COMMISSION_RATE = 0.15
 BOOKING_TAX_RATE = 0.08
 GST_RATE = 0.10

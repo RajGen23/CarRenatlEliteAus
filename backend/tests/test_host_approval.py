@@ -14,8 +14,10 @@ Covers:
 """
 
 import os
+import random
 import uuid
 import asyncio
+import itertools
 from datetime import datetime, timezone, timedelta
 
 import pytest
@@ -28,6 +30,10 @@ from settings import API
 DEMO_CAR = "vcar_demo_porsche_911"
 SEEDED_REQUEST = "bk_demo_request_01"
 
+# Each booking gets its own dates so confirmed test trips never overlap each other,
+# including trips left behind by earlier runs against the same database.
+_slots = itertools.count(random.randint(60, 1500) // 3 * 3, 3)
+
 
 # helpers
 
@@ -38,7 +44,9 @@ def _login(identifier: str, password: str) -> str:
 
 
 def _register(username: str, password: str, name: str, email: str) -> str:
-    r = requests.post(f"{API}/auth/register", json={"username": username, "password": password, "name": name, "email": email})
+    r = requests.post(f"{API}/auth/register", json={
+        "username": username, "password": password, "name": name, "email": email, "accept_terms": True,
+    })
     assert r.status_code == 200, r.text
     return r.json()["session_token"]
 
@@ -75,14 +83,15 @@ def _save_profile(tok: str, profile: dict):
 
 def _create_booking(tok: str, car_id: str = DEMO_CAR):
     now = datetime.now(timezone.utc)
-    p = now + timedelta(days=3)
-    d = now + timedelta(days=5)
+    p = now + timedelta(days=next(_slots))
+    d = p + timedelta(days=2)
     payload = {
         "car_id": car_id,
         "pickup_location": "Melbourne",
         "drop_location": "Melbourne",
         "pickup_datetime": p.isoformat(),
         "drop_datetime": d.isoformat(),
+        "accept_rental_terms": True,
     }
     r = requests.post(f"{API}/bookings", json=payload, headers=_hdr(tok))
     return r
@@ -196,10 +205,12 @@ class TestVendorRequests:
         req = next((x for x in body["requests"] if x["booking_id"] == SEEDED_REQUEST), body["requests"][0])
         renter = req.get("renter")
         assert renter is not None
-        # all required renter card fields
-        for k in ("name", "picture", "email", "phone", "dob", "address", "license_no", "license_expiry",
-                  "license_verified", "id_verified", "member_since", "trips", "cancellations", "rating"):
+        for k in ("name", "picture", "license_verified", "id_verified", "member_since",
+                  "trips", "cancellations", "rating"):
             assert k in renter, f"renter card missing '{k}'"
+        # personal details stay private until the host accepts
+        for k in ("email", "phone", "dob", "address", "license_no", "license_expiry"):
+            assert k not in renter, f"renter card leaks '{k}' before acceptance"
 
     def test_accept_debits_renter_wallet_exactly_once(self, renter_token, vendor_token):
         # get the fresh booking id from earlier test (or create one)

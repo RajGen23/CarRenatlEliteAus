@@ -114,6 +114,7 @@ class TestRegister:
             "password": "Passw0rd!",
             "name": "TEST_Newbie",
             "email": f"{self.new_username}@test.local",
+            "accept_terms": True,
         })
         assert r.status_code == 200, r.text
         d = r.json()
@@ -126,15 +127,53 @@ class TestRegister:
         r = requests.post(f"{API}/auth/register", json={
             "username": self.new_username,
             "password": "Anotherpw1",
+            "email": f"other_{self.new_username}@test.local",
+            "accept_terms": True,
         })
         assert r.status_code == 409
 
+    def test_register_duplicate_email(self):
+        r = requests.post(f"{API}/auth/register", json={
+            "username": f"y_{self.new_username}",
+            "password": "Anotherpw1",
+            "email": f"{self.new_username.upper()}@test.local",
+            "accept_terms": True,
+        })
+        assert r.status_code == 409
+
+    def test_register_requires_email(self):
+        r = requests.post(f"{API}/auth/register", json={
+            "username": f"z_{self.new_username}", "password": "Goodpw12", "accept_terms": True,
+        })
+        assert r.status_code == 400
+        assert "email" in r.json()["detail"].lower()
+
+    def test_register_rejects_invalid_email(self):
+        r = requests.post(f"{API}/auth/register", json={
+            "username": f"z_{self.new_username}", "password": "Goodpw12",
+            "email": "not-an-email", "accept_terms": True,
+        })
+        assert r.status_code == 400
+
+    def test_register_requires_terms(self):
+        r = requests.post(f"{API}/auth/register", json={
+            "username": f"z_{self.new_username}", "password": "Goodpw12",
+            "email": f"z_{self.new_username}@test.local",
+        })
+        assert r.status_code == 400
+        assert "terms" in r.json()["detail"].lower()
+
     def test_register_weak_password(self):
-        r = requests.post(f"{API}/auth/register", json={"username": f"x_{self.new_username}", "password": "123"})
+        r = requests.post(f"{API}/auth/register", json={
+            "username": f"x_{self.new_username}", "password": "123",
+            "email": f"x_{self.new_username}@test.local", "accept_terms": True,
+        })
         assert r.status_code == 400
 
     def test_register_invalid_username_chars(self):
-        r = requests.post(f"{API}/auth/register", json={"username": "bad name!", "password": "Goodpw1"})
+        r = requests.post(f"{API}/auth/register", json={
+            "username": "bad name!", "password": "Goodpw1", "email": "bad@test.local", "accept_terms": True,
+        })
         assert r.status_code == 400
 
     def test_me_with_registered_token(self):

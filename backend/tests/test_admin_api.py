@@ -167,7 +167,7 @@ class TestVehicles:
 
     def test_reject_and_approve_car(self, auth_h):
         r = requests.get(f"{API}/admin/cars", headers=auth_h, timeout=15)
-        car_id = r.json()[0]["car_id"]
+        car_id = next(c["car_id"] for c in r.json() if not c.get("vendor_id"))
         # reject
         r = requests.post(f"{API}/admin/cars/{car_id}/reject", headers=auth_h, timeout=15)
         assert r.status_code == 200

@@ -203,6 +203,9 @@ class TestBookings:
             "payment_method": "wallet",
         }
         r = requests.post(f"{API}/bookings", json=payload, headers=AUTH)
+        assert r.status_code == 400, "booking must require accepting the rental terms"
+
+        r = requests.post(f"{API}/bookings", json={**payload, "accept_rental_terms": True}, headers=AUTH)
         assert r.status_code == 200, r.text
         b = r.json()
         TestBookings.booking_id = b["booking_id"]
@@ -248,15 +251,63 @@ class TestBookings:
 
 # REVIEWS
 class TestReviews:
+    def test_review_requires_completed_trip(self):
+        async def _clear():
+            client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+            db = client[os.environ["DB_NAME"]]
+            await db.bookings.delete_many({"user_id": "user_test_1", "car_id": "car_lambo_aventador"})
+            await db.reviews.delete_many({"user_id": "user_test_1", "car_id": "car_lambo_aventador"})
+            client.close()
+        asyncio.get_event_loop().run_until_complete(_clear())
+
+        eligibility = requests.get(f"{API}/reviews/eligibility?car_id=car_lambo_aventador", headers=AUTH).json()
+        assert eligibility["eligible"] is False
+        r = requests.post(
+            f"{API}/reviews",
+            json={"car_id": "car_lambo_aventador", "rating": 5, "comment": "TEST_never_drove_it"},
+            headers=AUTH,
+        )
+        assert r.status_code == 403
+
     def test_create_and_get_review(self):
+        async def _complete_trip():
+            client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+            db = client[os.environ["DB_NAME"]]
+            now = datetime.now(timezone.utc)
+            await db.bookings.insert_one({
+                "booking_id": "bk_TEST_review_trip",
+                "user_id": "user_test_1",
+                "car_id": "car_lambo_aventador",
+                "pickup_datetime": (now - timedelta(days=5)).isoformat(),
+                "drop_datetime": (now - timedelta(days=3)).isoformat(),
+                "pickup_at": (now - timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "drop_at": (now - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "status": "completed",
+                "total": 2900.0,
+                "created_at": (now - timedelta(days=6)).isoformat(),
+            })
+            client.close()
+        asyncio.get_event_loop().run_until_complete(_complete_trip())
+
+        eligibility = requests.get(f"{API}/reviews/eligibility?car_id=car_lambo_aventador", headers=AUTH).json()
+        assert eligibility == {"eligible": True, "booking_id": "bk_TEST_review_trip"}
+
         r = requests.post(
             f"{API}/reviews",
             json={"car_id": "car_lambo_aventador", "rating": 5, "comment": "TEST_amazing"},
             headers=AUTH,
         )
-        assert r.status_code == 200
+        assert r.status_code == 200, r.text
         rid = r.json()["review_id"]
         assert rid.startswith("rv_")
+        assert r.json()["booking_id"] == "bk_TEST_review_trip"
+
+        again = requests.post(
+            f"{API}/reviews",
+            json={"car_id": "car_lambo_aventador", "rating": 1, "comment": "TEST_second_review"},
+            headers=AUTH,
+        )
+        assert again.status_code == 403
 
         r2 = requests.get(f"{API}/cars/car_lambo_aventador/reviews")
         assert r2.status_code == 200

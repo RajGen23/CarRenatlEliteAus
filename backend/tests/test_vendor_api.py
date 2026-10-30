@@ -14,6 +14,20 @@ RENTER_TOKEN = "test_renter_token_222"
 VAUTH = {"Authorization": f"Bearer {VENDOR_TOKEN}"}
 RAUTH = {"Authorization": f"Bearer {RENTER_TOKEN}"}
 
+# 1x1 PNG, enough to exercise document upload validation.
+TINY_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+)
+
+
+def _documents():
+    expiry = (datetime.now(timezone.utc) + timedelta(days=365)).date().isoformat()
+    return {
+        "insurance_expiry": expiry,
+        "insurance_document": {"content_type": "image/png", "data_b64": TINY_PNG, "file_name": "insurance.png"},
+        "registration_document": {"content_type": "image/png", "data_b64": TINY_PNG, "file_name": "rego.png"},
+    }
+
 
 @pytest.fixture(scope="session", autouse=True)
 def seed_vendor_data():
@@ -24,6 +38,7 @@ def seed_vendor_data():
         for uid in ("user_test_vendor", "user_test_renter"):
             await db.bookings.delete_many({"user_id": uid})
         await db.cars.delete_many({"vendor_id": "user_test_vendor"})
+        await db.vehicle_documents.delete_many({"vendor_id": "user_test_vendor"})
         await db.vendor_payouts.delete_many({"vendor_id": "user_test_vendor"})
 
         # Vendor user (starts as NON-vendor; onboarding test will flip is_vendor)
@@ -153,6 +168,7 @@ class TestVendorCars:
             "image": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800",
             "gallery": [], "features": ["V6", "Hybrid"], "description": "TEST vendor car",
             "horsepower": 671, "top_speed": 330, "acceleration": "3.0s",
+            **_documents(),
         }
         r = requests.post(f"{API}/vendor/cars", json=payload, headers=VAUTH)
         assert r.status_code == 200, r.text
@@ -160,17 +176,53 @@ class TestVendorCars:
         assert car["vendor_id"] == "user_test_vendor"
         assert car["brand"] == "TEST_McLaren"
         assert car["car_id"].startswith("vcar_")
+        assert car["approval_status"] == "pending"
+        assert car["listing_status"] == "pending"
         # default gallery copied from image
         assert car["gallery"] == [payload["image"]]
+        # documents are stored separately, never on the car record
+        assert "insurance_document" not in car and "registration_document" not in car
         TestVendorCars.created_car_id = car["car_id"]
 
         # GET /vendor/cars returns it
         listed = requests.get(f"{API}/vendor/cars", headers=VAUTH).json()
         assert any(c["car_id"] == car["car_id"] for c in listed)
 
-        # Public /cars also includes it
+        # Renters can't see it until the vehicle has been reviewed
         public = requests.get(f"{API}/cars").json()
-        assert any(c["car_id"] == car["car_id"] for c in public)
+        assert not any(c["car_id"] == car["car_id"] for c in public)
+        assert requests.get(f"{API}/cars/{car['car_id']}").status_code == 404
+
+    def test_create_requires_documents(self):
+        base = {
+            "brand": "TEST_NoDocs", "model": "X", "category": "SUV", "price_per_day": 100.0,
+            "fuel_type": "Petrol", "transmission": "Automatic", "seats": 4,
+            "image": "https://example.com/x.jpg", "description": "TEST",
+        }
+        r = requests.post(f"{API}/vendor/cars", json=base, headers=VAUTH)
+        assert r.status_code == 400
+        docs = _documents()
+        docs.pop("registration_document")
+        r = requests.post(f"{API}/vendor/cars", json={**base, **docs}, headers=VAUTH)
+        assert r.status_code == 400
+        expired = {**_documents(), "insurance_expiry": "2020-01-01"}
+        r = requests.post(f"{API}/vendor/cars", json={**base, **expired}, headers=VAUTH)
+        assert r.status_code == 400
+        bad_type = _documents()
+        bad_type["insurance_document"]["content_type"] = "text/html"
+        r = requests.post(f"{API}/vendor/cars", json={**base, **bad_type}, headers=VAUTH)
+        assert r.status_code == 400
+
+    def test_owner_can_read_documents(self):
+        cid = TestVendorCars.created_car_id
+        r = requests.get(f"{API}/vendor/cars/{cid}", headers=VAUTH)
+        assert r.status_code == 200, r.text
+        kinds = {d["kind"] for d in r.json()["documents"]}
+        assert kinds == {"insurance", "registration"}
+        assert all("data_b64" not in d for d in r.json()["documents"])
+        doc = requests.get(f"{API}/vendor/cars/{cid}/documents/insurance", headers=VAUTH)
+        assert doc.status_code == 200
+        assert doc.json()["data_b64"] == TINY_PNG
 
     def test_patch_vendor_car(self):
         cid = TestVendorCars.created_car_id
@@ -220,9 +272,10 @@ class TestVendorCars:
         payload = {
             "brand": "TEST_TempCar", "model": "Z", "category": "SUV", "price_per_day": 100.0,
             "fuel_type": "Petrol", "transmission": "Automatic", "seats": 4,
-            "image": "https://example.com/z.jpg", "description": "TEST",
+            "image": "https://example.com/z.jpg", "description": "TEST", **_documents(),
         }
         r = requests.post(f"{API}/vendor/cars", json=payload, headers=VAUTH)
+        assert r.status_code == 200, r.text
         cid = r.json()["car_id"]
         d = requests.delete(f"{API}/vendor/cars/{cid}", headers=VAUTH)
         assert d.status_code == 200
@@ -315,6 +368,14 @@ class TestVendorBookingsRevenue:
         assert round(after["paid_out"] - before["paid_out"], 2) == 100.0
         # available reduced by 100
         assert round(avail_before - after["available"], 2) == 100.0
+
+    def test_payout_capped_at_available_balance(self):
+        available = requests.get(f"{API}/vendor/revenue", headers=VAUTH).json()["available"]
+        r = requests.post(f"{API}/vendor/payouts", json={"amount": available + 0.01}, headers=VAUTH)
+        assert r.status_code == 400
+        r = requests.post(f"{API}/vendor/payouts", json={"amount": 100000}, headers=VAUTH)
+        assert r.status_code == 400
+        assert requests.get(f"{API}/vendor/revenue", headers=VAUTH).json()["available"] == available
 
     def test_payout_negative_rejected(self):
         r = requests.post(f"{API}/vendor/payouts", json={"amount": -50}, headers=VAUTH)
